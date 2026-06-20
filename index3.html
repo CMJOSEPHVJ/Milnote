@@ -1,0 +1,2577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Milanote Clone · Infinite Canvas</title>
+    <!-- Libraries for export -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js">
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+    </script>
+    <style>
+        /* ─── CSS Variables (Light & Dark) ─── */
+        :root {
+            --bg-primary: #f4f6f9;
+            --bg-secondary: #ffffff;
+            --bg-sidebar: #1a1a2e;
+            --text-primary: #1e1e2f;
+            --text-secondary: #b8bfd0;
+            --border-color: #e9edf4;
+            --card-bg: #ffffff;
+            --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+            --card-border: #eef2f8;
+            --accent: #6c5ce7;
+            --accent-hover: #5a4bd1;
+            --toolbar-bg: #f0f2f7;
+            --toolbar-text: #2d3748;
+            --empty-text: #8b95a9;
+            --modal-bg: #fff;
+            --lightbox-bg: rgba(0, 0, 0, 0.85);
+        }
+        .dark-theme {
+            --bg-primary: #12121a;
+            --bg-secondary: #1e1e2e;
+            --bg-sidebar: #0d0d18;
+            --text-primary: #eaeef2;
+            --text-secondary: #8b95a9;
+            --border-color: #2a2a3e;
+            --card-bg: #1e1e2e;
+            --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.2);
+            --card-border: #2a2a3e;
+            --accent: #7c6cf0;
+            --accent-hover: #6c5ce7;
+            --toolbar-bg: #2a2a3e;
+            --toolbar-text: #c8d0e0;
+            --empty-text: #6b7280;
+            --modal-bg: #1e1e2e;
+            --lightbox-bg: rgba(0, 0, 0, 0.9);
+        }
+
+        /* ─── RESET & BASE ─── */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            transition: background 0.3s, color 0.3s;
+        }
+        button {
+            cursor: pointer;
+            font-family: inherit;
+            border: none;
+            background: none;
+            font-size: 0.875rem;
+        }
+        input,
+        textarea {
+            font-family: inherit;
+            font-size: 0.875rem;
+            border: none;
+            outline: none;
+            background: transparent;
+            color: var(--text-primary);
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c4c9d4;
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .dark-theme ::-webkit-scrollbar-thumb {
+            background: #3a3a4e;
+        }
+
+        /* ─── SIDEBAR ─── */
+        #sidebar {
+            width: 260px;
+            min-width: 260px;
+            background: var(--bg-sidebar);
+            color: var(--text-secondary);
+            display: flex;
+            flex-direction: column;
+            padding: 20px 16px;
+            height: 100vh;
+            overflow-y: auto;
+            box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
+            z-index: 10;
+            transition: background 0.3s;
+        }
+        #sidebar .logo {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #eaeef2;
+        }
+        #sidebar .logo span {
+            background: var(--accent);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #fff;
+            letter-spacing: 0.3px;
+        }
+        #sidebar .board-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+        #sidebar .board-item {
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 4px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 0.15s, border 0.15s;
+            cursor: grab;
+            color: var(--text-secondary);
+            border: 2px solid transparent;
+            user-select: none;
+        }
+        #sidebar .board-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: #fff;
+        }
+        #sidebar .board-item.active {
+            background: rgba(108, 92, 231, 0.35);
+            color: #fff;
+        }
+        #sidebar .board-item.drag-over {
+            border-color: var(--accent);
+            background: rgba(108, 92, 231, 0.15);
+        }
+        #sidebar .board-item .del-board {
+            opacity: 0;
+            color: #e74c6f;
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            transition: 0.15s;
+            cursor: pointer;
+        }
+        #sidebar .board-item:hover .del-board {
+            opacity: 1;
+        }
+        #sidebar .board-item .del-board:hover {
+            background: rgba(231, 76, 111, 0.2);
+        }
+        #sidebar .add-board-btn {
+            margin-top: 12px;
+            padding: 12px 16px;
+            background: rgba(108, 92, 231, 0.25);
+            border-radius: 8px;
+            color: #c8bfff;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: 0.15s;
+            text-align: center;
+            border: 1px dashed rgba(108, 92, 231, 0.3);
+            cursor: pointer;
+        }
+        #sidebar .add-board-btn:hover {
+            background: rgba(108, 92, 231, 0.4);
+            color: #fff;
+        }
+        #sidebar .sidebar-footer {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            font-size: 0.75rem;
+            color: #6b7280;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        #sidebar .sidebar-footer button {
+            color: #8b95a9;
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.04);
+            transition: 0.15s;
+            cursor: pointer;
+        }
+        #sidebar .sidebar-footer button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+        #sidebar .theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: 0.15s;
+            color: #b8bfd0;
+        }
+        #sidebar .theme-toggle:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        /* ─── MAIN CONTENT ─── */
+        #main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            background: var(--bg-primary);
+            position: relative;
+            transition: background 0.3s;
+        }
+        #topbar {
+            padding: 12px 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            min-height: 64px;
+            gap: 12px;
+            flex-wrap: wrap;
+            transition: background 0.3s, border-color 0.3s;
+        }
+        #topbar .board-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            background: transparent;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 6px;
+            min-width: 120px;
+        }
+        #topbar .board-title:focus {
+            background: var(--toolbar-bg);
+            outline: 2px solid var(--accent);
+        }
+        #topbar .toolbar-group {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        #topbar .toolbar-group button {
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.75rem;
+            background: var(--toolbar-bg);
+            color: var(--toolbar-text);
+            transition: 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            border: 1px solid transparent;
+            cursor: pointer;
+        }
+        #topbar .toolbar-group button:hover {
+            background: var(--border-color);
+            border-color: var(--text-secondary);
+        }
+        #topbar .toolbar-group button.primary {
+            background: var(--accent);
+            color: #fff;
+        }
+        #topbar .toolbar-group button.primary:hover {
+            background: var(--accent-hover);
+        }
+        #topbar .toolbar-group button .icon {
+            font-size: 1rem;
+            line-height: 1;
+        }
+        #topbar .toolbar-group .divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border-color);
+            margin: 0 4px;
+        }
+
+        /* ─── CANVAS WRAPPER (infinite canvas) ─── */
+        #canvas-wrapper {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+            background:
+                radial-gradient(circle at 20% 50%, rgba(108, 92, 231, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(0, 200, 200, 0.03) 0%, transparent 50%),
+                var(--bg-primary);
+            cursor: grab;
+            transition: background 0.3s;
+        }
+        #canvas-wrapper.drag-over {
+            background: rgba(108, 92, 231, 0.05);
+            outline: 3px dashed var(--accent);
+            outline-offset: -10px;
+        }
+        #canvas-wrapper.panning {
+            cursor: grabbing;
+        }
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform-origin: 0 0;
+            will-change: transform;
+        }
+        #canvas {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            min-height: 100%;
+            min-width: 100%;
+        }
+
+        /* ─── CARDS ─── */
+        .card {
+            position: absolute;
+            background: var(--card-bg);
+            border-radius: 14px;
+            box-shadow: var(--card-shadow);
+            padding: 16px 18px;
+            min-width: 200px;
+            max-width: 340px;
+            transition: box-shadow 0.2s, border-color 0.2s;
+            border: 1px solid var(--card-border);
+            cursor: grab;
+            user-select: none;
+            backdrop-filter: blur(2px);
+            color: var(--text-primary);
+        }
+        .card:hover {
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10), 0 2px 6px rgba(0, 0, 0, 0.04);
+            border-color: var(--text-secondary);
+        }
+        .card.dragging {
+            opacity: 0.85;
+            z-index: 1000 !important;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+            transform: rotate(1deg) scale(1.02);
+            transition: none;
+            cursor: grabbing;
+        }
+        .card .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+            gap: 8px;
+        }
+        .card .card-type-badge {
+            font-size: 0.6rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: var(--text-secondary);
+            background: var(--toolbar-bg);
+            padding: 2px 10px;
+            border-radius: 12px;
+        }
+        .card .card-actions {
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: 0.15s;
+        }
+        .card:hover .card-actions {
+            opacity: 1;
+        }
+        .card .card-actions button {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            transition: 0.15s;
+            cursor: pointer;
+        }
+        .card .card-actions button:hover {
+            background: var(--toolbar-bg);
+            color: #e74c6f;
+        }
+        .card .card-body {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        /* text card */
+        .card.text-card .card-body textarea {
+            width: 100%;
+            min-height: 60px;
+            resize: vertical;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: transparent;
+            padding: 2px 0;
+            border: none;
+            outline: none;
+        }
+        .card.text-card .card-body textarea:focus {
+            background: var(--toolbar-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        /* todo card */
+        .card.todo-card .todo-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 4px 0;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        .card.todo-card .todo-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+            accent-color: var(--accent);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .card.todo-card .todo-item .todo-text {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+        .card.todo-card .todo-item .todo-text:focus {
+            background: var(--toolbar-bg);
+        }
+        .card.todo-card .todo-item .todo-text.done {
+            text-decoration: line-through;
+            color: var(--text-secondary);
+        }
+        .card.todo-card .todo-item .del-todo {
+            color: #c4c9d4;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            opacity: 0;
+            transition: 0.15s;
+            cursor: pointer;
+        }
+        .card.todo-card .todo-item:hover .del-todo {
+            opacity: 1;
+        }
+        .card.todo-card .todo-item .del-todo:hover {
+            background: #fee8ed;
+            color: #e74c6f;
+        }
+        .card.todo-card .add-todo-btn {
+            margin-top: 8px;
+            font-size: 0.8rem;
+            color: var(--accent);
+            font-weight: 500;
+            padding: 4px 0;
+            opacity: 0.6;
+            transition: 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+        .card.todo-card .add-todo-btn:hover {
+            opacity: 1;
+        }
+
+        /* image card */
+        .card.image-card .image-preview {
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--toolbar-bg);
+            max-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+        }
+        .card.image-card .image-preview img {
+            width: 100%;
+            height: auto;
+            max-height: 300px;
+            object-fit: contain;
+            display: block;
+            transition: transform 0.2s;
+        }
+        .card.image-card .image-preview img:hover {
+            transform: scale(1.02);
+        }
+        .card.image-card .image-name {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            text-overflow: ellipsis;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .card.image-card .upload-btn {
+            display: block;
+            padding: 16px;
+            border: 2px dashed var(--card-border);
+            border-radius: 8px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: 0.15s;
+            background: var(--toolbar-bg);
+        }
+        .card.image-card .upload-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(108, 92, 231, 0.05);
+        }
+
+        /* link card */
+        .card.link-card .link-url {
+            font-size: 0.75rem;
+            color: var(--accent);
+            word-break: break-all;
+            margin-bottom: 4px;
+        }
+        .card.link-card .link-url a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .card.link-card .link-url a:hover {
+            text-decoration: underline;
+        }
+        .card.link-card .link-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin: 4px 0 2px;
+        }
+        .card.link-card .link-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+        .card.link-card .link-inputs input {
+            display: block;
+            width: 100%;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.85rem;
+            margin-bottom: 6px;
+            background: transparent;
+            color: var(--text-primary);
+        }
+        .card.link-card .link-inputs input:focus {
+            border-color: var(--accent);
+        }
+
+        /* file card */
+        .card.file-card .file-display {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+        }
+        .card.file-card .file-display .file-icon {
+            font-size: 2rem;
+            line-height: 1;
+            background: var(--toolbar-bg);
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+        .card.file-card .file-display .file-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .card.file-card .file-display .file-info .file-name {
+            font-weight: 500;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-primary);
+        }
+        .card.file-card .file-display .file-info .file-size {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+        .card.file-card .file-display .download-file {
+            background: var(--accent);
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: 0.15s;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+        .card.file-card .file-display .download-file:hover {
+            background: var(--accent-hover);
+        }
+        .card.file-card .upload-file-btn {
+            display: block;
+            padding: 14px;
+            border: 2px dashed var(--card-border);
+            border-radius: 8px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: 0.15s;
+            background: var(--toolbar-bg);
+            margin-top: 4px;
+        }
+        .card.file-card .upload-file-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(108, 92, 231, 0.05);
+        }
+
+        /* ─── LIGHTBOX ─── */
+        .lightbox {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--lightbox-bg);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            cursor: pointer;
+            padding: 40px;
+        }
+        .lightbox.open {
+            display: flex;
+        }
+        .lightbox img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 12px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        /* ─── MODAL ─── */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            animation: fadeIn 0.2s ease;
+        }
+        .modal-overlay.open {
+            display: flex;
+        }
+        .modal {
+            background: var(--modal-bg);
+            border-radius: 20px;
+            padding: 32px 36px;
+            max-width: 480px;
+            width: 90%;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25);
+            animation: slideUp 0.25s ease;
+            max-height: 85vh;
+            overflow-y: auto;
+            color: var(--text-primary);
+        }
+        .modal h2 {
+            font-size: 1.3rem;
+            margin-bottom: 16px;
+        }
+        .modal label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin: 12px 0 4px;
+        }
+        .modal input,
+        .modal textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-primary);
+            font-size: 0.9rem;
+            transition: 0.15s;
+            color: var(--text-primary);
+        }
+        .modal input:focus,
+        .modal textarea:focus {
+            border-color: var(--accent);
+            background: var(--bg-secondary);
+            box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.12);
+        }
+        .modal .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+        .modal .modal-actions button {
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: 0.15s;
+            cursor: pointer;
+        }
+        .modal .modal-actions .btn-cancel {
+            background: var(--toolbar-bg);
+            color: var(--text-secondary);
+        }
+        .modal .modal-actions .btn-cancel:hover {
+            background: var(--border-color);
+        }
+        .modal .modal-actions .btn-confirm {
+            background: var(--accent);
+            color: #fff;
+        }
+        .modal .modal-actions .btn-confirm:hover {
+            background: var(--accent-hover);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.97);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* ─── EMPTY STATE ─── */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--empty-text);
+            text-align: center;
+            padding: 40px;
+        }
+        .empty-state .big-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.4;
+        }
+        .empty-state h3 {
+            font-size: 1.2rem;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+        .empty-state p {
+            font-size: 0.9rem;
+            max-width: 320px;
+            line-height: 1.5;
+        }
+
+        /* ─── ZOOM CONTROLS (overlay) ─── */
+        #zoom-controls {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            gap: 6px;
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            padding: 6px 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border-color);
+            z-index: 5;
+        }
+        #zoom-controls button {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            font-size: 1rem;
+            background: transparent;
+            color: var(--text-primary);
+            transition: 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        #zoom-controls button:hover {
+            background: var(--toolbar-bg);
+        }
+        #zoom-controls .zoom-level {
+            font-size: 0.75rem;
+            font-weight: 500;
+            min-width: 48px;
+            text-align: center;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ─── RESPONSIVE ─── */
+        @media (max-width: 700px) {
+            #sidebar {
+                width: 200px;
+                min-width: 200px;
+                padding: 14px 10px;
+            }
+            #sidebar .logo {
+                font-size: 1.1rem;
+            }
+            #topbar {
+                padding: 10px 12px;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            #topbar .board-title {
+                font-size: 1rem;
+                min-width: 80px;
+            }
+            #canvas-wrapper {
+                padding: 0;
+            }
+            .card {
+                min-width: 150px;
+                max-width: 260px;
+                padding: 12px 14px;
+            }
+            .modal {
+                padding: 24px 20px;
+            }
+            #topbar .toolbar-group button {
+                padding: 4px 8px;
+                font-size: 0.7rem;
+            }
+            #zoom-controls {
+                bottom: 12px;
+                right: 12px;
+                padding: 4px 6px;
+            }
+            #zoom-controls button {
+                width: 28px;
+                height: 28px;
+                font-size: 0.9rem;
+            }
+            #zoom-controls .zoom-level {
+                min-width: 40px;
+                font-size: 0.7rem;
+            }
+        }
+        @media (max-width: 480px) {
+            #sidebar {
+                display: none;
+            }
+            .card {
+                min-width: 130px;
+                max-width: 220px;
+                padding: 10px 12px;
+            }
+        }
+
+        /* ─── MISC ─── */
+        .hidden {
+            display: none !important;
+        }
+        .text-muted {
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ─── SIDEBAR ─── -->
+    <aside id="sidebar">
+        <div class="logo">
+            📋 Milanote
+            <span>clone</span>
+        </div>
+        <div class="board-list" id="boardList"></div>
+        <button class="add-board-btn" id="addBoardBtn">＋ New Board</button>
+        <div class="sidebar-footer">
+            <button id="exportAllBtn">⬇ Export All</button>
+            <button id="importBtn">⬆ Import</button>
+            <button id="clearAllBtn" style="color:#e74c6f;">✕ Clear</button>
+        </div>
+        <div class="theme-toggle" id="themeToggle">
+            <span id="themeIcon">🌙</span>
+            <span id="themeLabel">Dark</span>
+        </div>
+    </aside>
+
+    <!-- ─── MAIN ─── -->
+    <div id="main">
+        <div id="topbar">
+            <input class="board-title" id="boardTitleInput" placeholder="Board name…" />
+            <div class="toolbar-group">
+                <button data-type="text" class="primary"><span class="icon">📝</span> Text</button>
+                <button data-type="todo"><span class="icon">✓</span> Todo</button>
+                <button data-type="image"><span class="icon">🖼</span> Image</button>
+                <button data-type="link"><span class="icon">🔗</span> Link</button>
+                <button data-type="file"><span class="icon">📎</span> File</button>
+                <span class="divider"></span>
+                <button id="exportPdfBtn" title="Export as PDF"><span class="icon">📄</span> PDF</button>
+                <button id="exportPngBtn" title="Export as Image"><span class="icon">🖼️</span> PNG</button>
+                <button id="exportTxtBtn" title="Export as Text"><span class="icon">📝</span> TXT</button>
+            </div>
+        </div>
+        <div id="canvas-wrapper">
+            <div id="canvas-container">
+                <div id="canvas"></div>
+            </div>
+            <div class="empty-state" id="emptyState">
+                <div class="big-icon">📂</div>
+                <h3>No cards yet</h3>
+                <p>Drag & drop images from the web, paste from clipboard, or click a card type above to add content.</p>
+            </div>
+            <!-- Zoom controls -->
+            <div id="zoom-controls">
+                <button id="zoomOutBtn" title="Zoom Out">−</button>
+                <span class="zoom-level" id="zoomLevel">100%</span>
+                <button id="zoomInBtn" title="Zoom In">+</button>
+                <button id="zoomResetBtn" title="Reset View">⟲</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── LIGHTBOX ─── -->
+    <div class="lightbox" id="lightbox">
+        <img id="lightboxImg" src="" alt="Full size" />
+    </div>
+
+    <!-- ─── MODAL ─── -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="modalContent">
+            <h2 id="modalTitle">Add Card</h2>
+            <div id="modalBody"></div>
+            <div class="modal-actions">
+                <button class="btn-cancel" id="modalCancel">Cancel</button>
+                <button class="btn-confirm" id="modalConfirm">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── FILE INPUTS (hidden) ─── -->
+    <input type="file" id="fileInput" style="display:none" accept="image/*,.*" multiple />
+    <input type="file" id="importFileInput" style="display:none" accept=".json" />
+
+    <script>
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  DATA LAYER
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const STORAGE_KEY = 'milanote_data';
+        let data = loadData();
+
+        function defaultData() {
+            return {
+                boards: {},
+                boardOrder: [],
+                currentBoardId: null,
+                nextCardId: 1,
+                nextBoardId: 1,
+                nextTodoId: 1,
+            };
+        }
+
+        function loadData() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (!parsed.boards) parsed.boards = {};
+                    if (!parsed.boardOrder) parsed.boardOrder = [];
+                    if (!parsed.currentBoardId) parsed.currentBoardId = null;
+                    if (!parsed.nextCardId) parsed.nextCardId = 1;
+                    if (!parsed.nextBoardId) parsed.nextBoardId = 1;
+                    if (!parsed.nextTodoId) parsed.nextTodoId = 1;
+                    return parsed;
+                }
+            } catch (_) { /* ignore */ }
+            return defaultData();
+        }
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  HELPERS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        function getCurrentBoard() {
+            if (!data.currentBoardId) return null;
+            return data.boards[data.currentBoardId] || null;
+        }
+
+        function getBoardCards(boardId) {
+            const board = data.boards[boardId];
+            if (!board) return {};
+            return board.cards || {};
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  BOARD CRUD
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        function createBoard(name) {
+            const id = 'b_' + (data.nextBoardId++);
+            data.boards[id] = {
+                id,
+                name: name || 'Untitled',
+                cards: {},
+            };
+            data.boardOrder.push(id);
+            data.currentBoardId = id;
+            saveData();
+            renderAll();
+            return id;
+        }
+
+        function deleteBoard(id) {
+            if (!data.boards[id]) return;
+            delete data.boards[id];
+            data.boardOrder = data.boardOrder.filter(bid => bid !== id);
+            if (data.currentBoardId === id) {
+                data.currentBoardId = data.boardOrder.length > 0 ? data.boardOrder[0] : null;
+            }
+            saveData();
+            renderAll();
+        }
+
+        function renameBoard(id, newName) {
+            if (data.boards[id]) {
+                data.boards[id].name = newName.trim() || 'Untitled';
+                saveData();
+                renderAll();
+            }
+        }
+
+        function switchBoard(id) {
+            if (data.boards[id]) {
+                data.currentBoardId = id;
+                saveData();
+                renderAll();
+                resetView(); // reset zoom/pan when switching boards
+            }
+        }
+
+        function reorderBoards(newOrder) {
+            const existing = newOrder.filter(id => data.boards[id]);
+            if (existing.length !== Object.keys(data.boards).length) {
+                const missing = Object.keys(data.boards).filter(id => !existing.includes(id));
+                existing.push(...missing);
+            }
+            data.boardOrder = existing;
+            saveData();
+            renderAll();
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  CARD CRUD
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        function addCard(boardId, type, content, position) {
+            const board = data.boards[boardId];
+            if (!board) return null;
+            const id = 'c_' + (data.nextCardId++);
+            const card = {
+                id,
+                type,
+                content: content || {},
+                position: position || { x: 60 + Math.random() * 120, y: 60 + Math.random() * 120 },
+                width: 280,
+            };
+            board.cards[id] = card;
+            saveData();
+            renderAll();
+            return id;
+        }
+
+        function updateCard(boardId, cardId, updates) {
+            const board = data.boards[boardId];
+            if (!board || !board.cards[cardId]) return;
+            Object.assign(board.cards[cardId], updates);
+            saveData();
+            renderAll();
+        }
+
+        function deleteCard(boardId, cardId) {
+            const board = data.boards[boardId];
+            if (!board || !board.cards[cardId]) return;
+            delete board.cards[cardId];
+            saveData();
+            renderAll();
+        }
+
+        function updateCardContent(boardId, cardId, content) {
+            const board = data.boards[boardId];
+            if (!board || !board.cards[cardId]) return;
+            board.cards[cardId].content = content;
+            saveData();
+            renderAll();
+        }
+
+        function moveCardToBoard(cardId, sourceBoardId, targetBoardId) {
+            if (sourceBoardId === targetBoardId) return;
+            const sourceBoard = data.boards[sourceBoardId];
+            const targetBoard = data.boards[targetBoardId];
+            if (!sourceBoard || !targetBoard) return;
+            const card = sourceBoard.cards[cardId];
+            if (!card) return;
+            delete sourceBoard.cards[cardId];
+            targetBoard.cards[cardId] = card;
+            saveData();
+            renderAll();
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  TODO HELPERS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        function addTodoItem(boardId, cardId, text) {
+            const board = data.boards[boardId];
+            if (!board || !board.cards[cardId]) return;
+            const card = board.cards[cardId];
+            if (card.type !== 'todo') return;
+            if (!card.content.items) card.content.items = [];
+            const item = {
+                id: 't_' + (data.nextTodoId++),
+                text: text || 'New task',
+                checked: false,
+            };
+            card.content.items.push(item);
+            saveData();
+            renderAll();
+        }
+
+        function toggleTodoItem(boardId, cardId, itemId) {
+            const board = data.boards[boardId];
+            if (!board || !board.cards[cardId]) return;
+            const card = board.cards[cardId];
+            if (card.type !== 'todo') return;
+            const item = card.content.items.find(i => i.id === itemId);
+            if (item) {
+                item.checked = !item.checked;
+                saveData();
+                renderAll();
+            }
+        }
+
+        function updateTodoText(boardId, cardId, itemId, text) {
+            const board = data.boards[boardId];
+            if (!board || !board.cards[cardId]) return;
+            const card = board.cards[cardId];
+            if (card.type !== 'todo') return;
+            const item = card.content.items.find(i => i.id === itemId);
+            if (item) {
+                item.text = text;
+                saveData();
+                renderAll();
+            }
+        }
+
+        function deleteTodoItem(boardId, cardId, itemId) {
+            const board = data.boards[boardId];
+            if (!board || !board.cards[cardId]) return;
+            const card = board.cards[cardId];
+            if (card.type !== 'todo') return;
+            card.content.items = card.content.items.filter(i => i.id !== itemId);
+            saveData();
+            renderAll();
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  INFINITE CANVAS (Pan & Zoom)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const viewState = {
+            x: 0,
+            y: 0,
+            scale: 1,
+        };
+        let isPanning = false;
+        let panStart = { x: 0, y: 0 };
+        let viewStart = { x: 0, y: 0 };
+        const container = document.getElementById('canvas-container');
+        const wrapper = document.getElementById('canvas-wrapper');
+        const zoomLevelEl = document.getElementById('zoomLevel');
+
+        function applyTransform() {
+            container.style.transform = `translate(${viewState.x}px, ${viewState.y}px) scale(${viewState.scale})`;
+            zoomLevelEl.textContent = Math.round(viewState.scale * 100) + '%';
+        }
+
+        function resetView() {
+            viewState.x = 0;
+            viewState.y = 0;
+            viewState.scale = 1;
+            applyTransform();
+        }
+
+        // Zoom in/out at center
+        function zoomIn() {
+            viewState.scale = Math.min(3, viewState.scale * 1.2);
+            applyTransform();
+        }
+
+        function zoomOut() {
+            viewState.scale = Math.max(0.2, viewState.scale / 1.2);
+            applyTransform();
+        }
+
+        // Pan with mouse drag on background
+        wrapper.addEventListener('mousedown', (e) => {
+            // Only pan if not clicking on a card or interactive element
+            const target = e.target;
+            if (target.closest('.card') || target.closest('button') || target.closest('input') || target.closest(
+                    'textarea')) return;
+            if (e.button === 0) { // left click
+                isPanning = true;
+                panStart.x = e.clientX;
+                panStart.y = e.clientY;
+                viewStart.x = viewState.x;
+                viewStart.y = viewState.y;
+                wrapper.classList.add('panning');
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isPanning) return;
+            const dx = e.clientX - panStart.x;
+            const dy = e.clientY - panStart.y;
+            viewState.x = viewStart.x + dx;
+            viewState.y = viewStart.y + dy;
+            applyTransform();
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isPanning) {
+                isPanning = false;
+                wrapper.classList.remove('panning');
+            }
+        });
+
+        // Mouse wheel zoom
+        wrapper.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            const newScale = Math.min(3, Math.max(0.2, viewState.scale * delta));
+            // Zoom around cursor
+            const rect = wrapper.getBoundingClientRect();
+            const offsetX = e.clientX - rect.left;
+            const offsetY = e.clientY - rect.top;
+            const worldX = (offsetX - viewState.x) / viewState.scale;
+            const worldY = (offsetY - viewState.y) / viewState.scale;
+            viewState.scale = newScale;
+            viewState.x = offsetX - worldX * viewState.scale;
+            viewState.y = offsetY - worldY * viewState.scale;
+            applyTransform();
+        }, { passive: false });
+
+        // Touch support for pan
+        let touchStart = null;
+        let touchViewStart = null;
+        wrapper.addEventListener('touchstart', (e) => {
+            if (e.target.closest('.card') || e.target.closest('button') || e.target.closest('input') || e.target
+                .closest('textarea')) return;
+            if (e.touches.length === 1) {
+                const t = e.touches[0];
+                touchStart = { x: t.clientX, y: t.clientY };
+                touchViewStart = { x: viewState.x, y: viewState.y };
+                wrapper.classList.add('panning');
+            }
+        }, { passive: true });
+
+        wrapper.addEventListener('touchmove', (e) => {
+            if (!touchStart || e.touches.length !== 1) return;
+            const t = e.touches[0];
+            const dx = t.clientX - touchStart.x;
+            const dy = t.clientY - touchStart.y;
+            viewState.x = touchViewStart.x + dx;
+            viewState.y = touchViewStart.y + dy;
+            applyTransform();
+            e.preventDefault();
+        }, { passive: false });
+
+        wrapper.addEventListener('touchend', () => {
+            touchStart = null;
+            touchViewStart = null;
+            wrapper.classList.remove('panning');
+        }, { passive: true });
+
+        // Zoom controls
+        document.getElementById('zoomInBtn').addEventListener('click', zoomIn);
+        document.getElementById('zoomOutBtn').addEventListener('click', zoomOut);
+        document.getElementById('zoomResetBtn').addEventListener('click', resetView);
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  RENDER
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        function renderAll() {
+            renderBoardList();
+            renderBoard();
+            renderCanvas();
+        }
+
+        function renderBoardList() {
+            const container = document.getElementById('boardList');
+            const ids = data.boardOrder.filter(id => data.boards[id]);
+            if (ids.length === 0) {
+                container.innerHTML =
+                    `<div style="padding:20px 0;color:#6b7280;font-size:0.85rem;text-align:center;">No boards yet<br><span style="font-size:0.75rem;">Click "New Board" to start</span></div>`;
+                return;
+            }
+            container.innerHTML = ids.map(id => {
+                const board = data.boards[id];
+                const active = id === data.currentBoardId ? 'active' : '';
+                return `<div class="board-item ${active}" data-id="${id}" draggable="true">
+                    <span>${board.name}</span>
+                    <button class="del-board" data-id="${id}" title="Delete board">✕</button>
+                </div>`;
+            }).join('');
+
+            container.querySelectorAll('.board-item').forEach(el => {
+                el.addEventListener('click', e => {
+                    if (e.target.closest('.del-board')) return;
+                    switchBoard(el.dataset.id);
+                });
+            });
+            container.querySelectorAll('.del-board').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    const id = btn.dataset.id;
+                    if (confirm(`Delete board "${data.boards[id]?.name}"?`)) {
+                        deleteBoard(id);
+                    }
+                });
+            });
+
+            // Board reorder
+            const items = container.querySelectorAll('.board-item');
+            items.forEach(item => {
+                item.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', item.dataset.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    item.classList.add('dragging');
+                });
+                item.addEventListener('dragend', (e) => {
+                    item.classList.remove('dragging');
+                    document.querySelectorAll('.board-item').forEach(el => el.classList.remove('drag-over'));
+                });
+                item.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    item.classList.add('drag-over');
+                });
+                item.addEventListener('dragleave', (e) => {
+                    item.classList.remove('drag-over');
+                });
+                item.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    const draggedId = e.dataTransfer.getData('text/plain');
+                    const targetId = item.dataset.id;
+                    if (draggedId && targetId && draggedId !== targetId && data.boards[draggedId] && data.boards[
+                            targetId]) {
+                        const currentOrder = data.boardOrder.filter(id => data.boards[id]);
+                        const draggedIndex = currentOrder.indexOf(draggedId);
+                        const targetIndex = currentOrder.indexOf(targetId);
+                        if (draggedIndex !== -1 && targetIndex !== -1) {
+                            currentOrder.splice(draggedIndex, 1);
+                            const newTargetIndex = currentOrder.indexOf(targetId);
+                            currentOrder.splice(newTargetIndex, 0, draggedId);
+                            reorderBoards(currentOrder);
+                        }
+                    }
+                    document.querySelectorAll('.board-item').forEach(el => el.classList.remove('drag-over'));
+                });
+            });
+        }
+
+        function renderBoard() {
+            const board = getCurrentBoard();
+            const input = document.getElementById('boardTitleInput');
+            if (!board) {
+                input.value = 'No board';
+                input.disabled = true;
+                return;
+            }
+            input.value = board.name;
+            input.disabled = false;
+            input.onchange = () => {
+                renameBoard(board.id, input.value);
+            };
+        }
+
+        function renderCanvas() {
+            const board = getCurrentBoard();
+            const canvas = document.getElementById('canvas');
+            const empty = document.getElementById('emptyState');
+            if (!board) {
+                canvas.innerHTML = '';
+                empty.style.display = 'flex';
+                return;
+            }
+            const cards = board.cards || {};
+            const ids = Object.keys(cards);
+            if (ids.length === 0) {
+                canvas.innerHTML = '';
+                empty.style.display = 'flex';
+                return;
+            }
+            empty.style.display = 'none';
+
+            let html = '';
+            for (const id of ids) {
+                const card = cards[id];
+                html += renderCardHTML(board.id, card);
+            }
+            canvas.innerHTML = html;
+
+            // attach drag & drop for reposition + cross-board
+            canvas.querySelectorAll('.card').forEach(el => {
+                makeDraggable(el);
+            });
+
+            // attach card event listeners
+            canvas.querySelectorAll('.card').forEach(el => {
+                const cardId = el.dataset.cardId;
+                const boardId = el.dataset.boardId;
+                const type = el.dataset.type;
+
+                el.querySelector('.delete-card')?.addEventListener('click', () => {
+                    if (confirm('Delete this card?')) {
+                        deleteCard(boardId, cardId);
+                    }
+                });
+
+                if (type === 'text') {
+                    const ta = el.querySelector('.card-body textarea');
+                    if (ta) {
+                        ta.addEventListener('input', () => {
+                            const content = { text: ta.value };
+                            updateCardContent(boardId, cardId, content);
+                        });
+                    }
+                }
+
+                if (type === 'todo') {
+                    el.querySelectorAll('.todo-item input[type="checkbox"]').forEach(cb => {
+                        cb.addEventListener('change', () => {
+                            toggleTodoItem(boardId, cardId, cb.dataset.itemId);
+                        });
+                    });
+                    el.querySelectorAll('.todo-item .todo-text').forEach(inp => {
+                        inp.addEventListener('input', () => {
+                            updateTodoText(boardId, cardId, inp.dataset.itemId, inp.value);
+                        });
+                    });
+                    el.querySelectorAll('.todo-item .del-todo').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            deleteTodoItem(boardId, cardId, btn.dataset.itemId);
+                        });
+                    });
+                    el.querySelector('.add-todo-btn')?.addEventListener('click', () => {
+                        const text = prompt('Task description:');
+                        if (text !== null && text.trim()) {
+                            addTodoItem(boardId, cardId, text.trim());
+                        } else if (text !== null && text.trim() === '') {
+                            addTodoItem(boardId, cardId, 'New task');
+                        }
+                    });
+                }
+
+                if (type === 'image') {
+                    const preview = el.querySelector('.image-preview');
+                    if (preview) {
+                        preview.addEventListener('click', () => {
+                            const img = preview.querySelector('img');
+                            if (img && img.src) {
+                                openLightbox(img.src);
+                            }
+                        });
+                    }
+                    const uploadBtn = el.querySelector('.upload-btn');
+                    const fileInput = document.getElementById('fileInput');
+                    if (uploadBtn) {
+                        uploadBtn.addEventListener('click', () => {
+                            fileInput.accept = 'image/*';
+                            fileInput.multiple = false;
+                            fileInput.dataset.targetCardId = cardId;
+                            fileInput.dataset.targetBoardId = boardId;
+                            fileInput.click();
+                        });
+                    }
+                }
+
+                if (type === 'link') {
+                    const urlInput = el.querySelector('.link-url-input');
+                    const titleInput = el.querySelector('.link-title-input');
+                    const descInput = el.querySelector('.link-desc-input');
+                    if (urlInput) {
+                        urlInput.addEventListener('input', () => {
+                            const content = {
+                                url: urlInput.value,
+                                title: el.querySelector('.link-title-input')?.value || '',
+                                description: el.querySelector('.link-desc-input')?.value || '',
+                            };
+                            updateCardContent(boardId, cardId, content);
+                        });
+                    }
+                    if (titleInput) {
+                        titleInput.addEventListener('input', () => {
+                            const content = {
+                                url: el.querySelector('.link-url-input')?.value || '',
+                                title: titleInput.value,
+                                description: el.querySelector('.link-desc-input')?.value || '',
+                            };
+                            updateCardContent(boardId, cardId, content);
+                        });
+                    }
+                    if (descInput) {
+                        descInput.addEventListener('input', () => {
+                            const content = {
+                                url: el.querySelector('.link-url-input')?.value || '',
+                                title: el.querySelector('.link-title-input')?.value || '',
+                                description: descInput.value,
+                            };
+                            updateCardContent(boardId, cardId, content);
+                        });
+                    }
+                }
+
+                if (type === 'file') {
+                    const dlBtn = el.querySelector('.download-file');
+                    if (dlBtn) {
+                        dlBtn.addEventListener('click', () => {
+                            const card = data.boards[boardId]?.cards[cardId];
+                            if (card?.content?.data) {
+                                const a = document.createElement('a');
+                                a.href = card.content.data;
+                                a.download = card.content.name || 'file';
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                            } else {
+                                alert('File data not found.');
+                            }
+                        });
+                    }
+                    const uploadBtn = el.querySelector('.upload-file-btn');
+                    if (uploadBtn) {
+                        uploadBtn.addEventListener('click', () => {
+                            const fileInput = document.getElementById('fileInput');
+                            fileInput.accept = '*/*';
+                            fileInput.multiple = false;
+                            fileInput.dataset.targetCardId = cardId;
+                            fileInput.dataset.targetBoardId = boardId;
+                            fileInput.click();
+                        });
+                    }
+                }
+            });
+        }
+
+        function renderCardHTML(boardId, card) {
+            const pos = card.position || { x: 60, y: 60 };
+            const style = `left:${pos.x}px;top:${pos.y}px;width:${card.width || 280}px;`;
+            let body = '';
+
+            switch (card.type) {
+                case 'text': {
+                    const text = card.content?.text || '';
+                    body = `<textarea placeholder="Write something…">${escapeHTML(text)}</textarea>`;
+                    break;
+                }
+                case 'todo': {
+                    const items = card.content?.items || [];
+                    body = items.map(item => `
+                        <div class="todo-item" data-item-id="${item.id}">
+                            <input type="checkbox" ${item.checked ? 'checked' : ''} data-item-id="${item.id}" />
+                            <input class="todo-text ${item.checked ? 'done' : ''}" value="${escapeHTML(item.text)}" data-item-id="${item.id}" />
+                            <button class="del-todo" data-item-id="${item.id}">✕</button>
+                        </div>
+                    `).join('');
+                    body += `<button class="add-todo-btn">＋ Add task</button>`;
+                    break;
+                }
+                case 'image': {
+                    const dataUrl = card.content?.data || '';
+                    const name = card.content?.name || '';
+                    if (dataUrl) {
+                        body = `
+                            <div class="image-preview"><img src="${dataUrl}" alt="${escapeHTML(name)}" loading="lazy" /></div>
+                            <div class="image-name">${escapeHTML(name)}</div>
+                            <button class="upload-btn" style="margin-top:8px;">🔄 Change</button>
+                        `;
+                    } else {
+                        body = `<button class="upload-btn">📤 Upload Image</button>`;
+                    }
+                    break;
+                }
+                case 'link': {
+                    const url = card.content?.url || '';
+                    const title = card.content?.title || '';
+                    const desc = card.content?.description || '';
+                    body = `
+                        <div class="link-inputs">
+                            <input class="link-url-input" placeholder="URL" value="${escapeHTML(url)}" />
+                            <input class="link-title-input" placeholder="Title" value="${escapeHTML(title)}" />
+                            <input class="link-desc-input" placeholder="Description" value="${escapeHTML(desc)}" />
+                        </div>
+                        ${url ? `<div class="link-url"><a href="${escapeHTML(url)}" target="_blank">${escapeHTML(url)}</a></div>` : ''}
+                        ${title ? `<div class="link-title">${escapeHTML(title)}</div>` : ''}
+                        ${desc ? `<div class="link-desc">${escapeHTML(desc)}</div>` : ''}
+                    `;
+                    break;
+                }
+                case 'file': {
+                    const dataUrl = card.content?.data || '';
+                    const name = card.content?.name || '';
+                    const size = card.content?.size || 0;
+                    if (dataUrl) {
+                        body = `
+                            <div class="file-display">
+                                <div class="file-icon">📄</div>
+                                <div class="file-info">
+                                    <div class="file-name">${escapeHTML(name)}</div>
+                                    <div class="file-size">${formatFileSize(size)}</div>
+                                </div>
+                                <button class="download-file">⬇ Download</button>
+                            </div>
+                            <button class="upload-file-btn" style="margin-top:6px;">🔄 Replace</button>
+                        `;
+                    } else {
+                        body = `<button class="upload-file-btn">📎 Upload File</button>`;
+                    }
+                    break;
+                }
+                default:
+                    body = '<span class="text-muted">Unknown card type</span>';
+            }
+
+            const typeLabels = {
+                text: '📝 Text',
+                todo: '✓ Todo',
+                image: '🖼 Image',
+                link: '🔗 Link',
+                file: '📎 File'
+            };
+
+            return `<div class="card ${card.type}-card" 
+                        data-card-id="${card.id}" 
+                        data-board-id="${boardId}" 
+                        data-type="${card.type}"
+                        style="${style}">
+                    <div class="card-header">
+                        <span class="card-type-badge">${typeLabels[card.type] || card.type}</span>
+                        <div class="card-actions">
+                            <button class="delete-card" title="Delete card">✕</button>
+                        </div>
+                    </div>
+                    <div class="card-body">${body}</div>
+                </div>`;
+        }
+
+        function escapeHTML(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/\n/g, '&#10;');
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  DRAG & DROP (card reposition + move to board)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        let dragState = null;
+        let dropTargetBoardId = null;
+
+        function makeDraggable(el) {
+            el.addEventListener('mousedown', startDrag);
+            el.addEventListener('touchstart', startDragTouch, { passive: false });
+        }
+
+        function startDrag(e) {
+            if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) return;
+            if (e.target.closest('.card-actions')) return;
+            const card = e.currentTarget;
+            const cardId = card.dataset.cardId;
+            const boardId = card.dataset.boardId;
+            const rect = card.getBoundingClientRect();
+            const offsetX = e.clientX - rect.left;
+            const offsetY = e.clientY - rect.top;
+            dragState = {
+                card,
+                cardId,
+                boardId,
+                offsetX,
+                offsetY,
+                startX: rect.left,
+                startY: rect.top,
+                moved: false,
+            };
+            card.classList.add('dragging');
+            card.style.zIndex = 100;
+            document.addEventListener('mousemove', onDragMove);
+            document.addEventListener('mouseup', onDragEnd);
+            e.preventDefault();
+        }
+
+        function startDragTouch(e) {
+            if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) return;
+            if (e.target.closest('.card-actions')) return;
+            const touch = e.touches[0];
+            const card = e.currentTarget;
+            const rect = card.getBoundingClientRect();
+            const offsetX = touch.clientX - rect.left;
+            const offsetY = touch.clientY - rect.top;
+            dragState = {
+                card,
+                cardId: card.dataset.cardId,
+                boardId: card.dataset.boardId,
+                offsetX,
+                offsetY,
+                startX: rect.left,
+                startY: rect.top,
+                moved: false,
+            };
+            card.classList.add('dragging');
+            card.style.zIndex = 100;
+            document.addEventListener('touchmove', onDragMoveTouch, { passive: false });
+            document.addEventListener('touchend', onDragEndTouch, { passive: false });
+            e.preventDefault();
+        }
+
+        function onDragMove(e) {
+            if (!dragState) return;
+            dragState.moved = true;
+            const { card, offsetX, offsetY, boardId, cardId } = dragState;
+            const parent = card.parentElement;
+            const parentRect = parent.getBoundingClientRect();
+            // Account for zoom/pan: we need to convert screen coordinates to card coordinates relative to canvas.
+            // Since the card is inside #canvas which is inside #canvas-container which has transform,
+            // we need to get the position relative to the canvas (untransformed).
+            const containerRect = container.getBoundingClientRect();
+            const scale = viewState.scale;
+            const tx = viewState.x;
+            const ty = viewState.y;
+            // Compute the card's new position in the canvas coordinate system.
+            // The card's CSS left/top are relative to #canvas, which is not transformed.
+            // But we are moving the card by adjusting left/top directly.
+            // We want the card to follow the mouse in screen space, but we need to account for the transform.
+            // Approach: get the mouse position relative to the wrapper, then convert to canvas coordinates.
+            const wrapperRect = wrapper.getBoundingClientRect();
+            const mouseX = e.clientX - wrapperRect.left;
+            const mouseY = e.clientY - wrapperRect.top;
+            // Convert to canvas coordinates (untransformed)
+            const canvasX = (mouseX - tx) / scale;
+            const canvasY = (mouseY - ty) / scale;
+            // Offset by the offset we captured (relative to card's top-left)
+            const newX = canvasX - offsetX / scale;
+            const newY = canvasY - offsetY / scale;
+            card.style.left = newX + 'px';
+            card.style.top = newY + 'px';
+
+            // detect drop target on sidebar
+            const target = document.elementFromPoint(e.clientX, e.clientY);
+            const boardItem = target ? target.closest('.board-item') : null;
+            document.querySelectorAll('.board-item').forEach(el => el.classList.remove('drag-over'));
+            if (boardItem) {
+                const targetBoardId = boardItem.dataset.id;
+                if (targetBoardId && targetBoardId !== boardId) {
+                    boardItem.classList.add('drag-over');
+                    dropTargetBoardId = targetBoardId;
+                } else {
+                    dropTargetBoardId = null;
+                }
+            } else {
+                dropTargetBoardId = null;
+            }
+
+            // Throttle save position
+            if (!dragState._saveTimer) {
+                dragState._saveTimer = setTimeout(() => {
+                    const board = data.boards[boardId];
+                    if (board && board.cards[cardId]) {
+                        board.cards[cardId].position = { x: newX, y: newY };
+                        saveData();
+                    }
+                    dragState._saveTimer = null;
+                }, 100);
+            }
+        }
+
+        function onDragMoveTouch(e) {
+            e.preventDefault();
+            if (!dragState) return;
+            dragState.moved = true;
+            const touch = e.touches[0];
+            const { card, offsetX, offsetY, boardId, cardId } = dragState;
+            const wrapperRect = wrapper.getBoundingClientRect();
+            const mouseX = touch.clientX - wrapperRect.left;
+            const mouseY = touch.clientY - wrapperRect.top;
+            const scale = viewState.scale;
+            const tx = viewState.x;
+            const ty = viewState.y;
+            const canvasX = (mouseX - tx) / scale;
+            const canvasY = (mouseY - ty) / scale;
+            const newX = canvasX - offsetX / scale;
+            const newY = canvasY - offsetY / scale;
+            card.style.left = newX + 'px';
+            card.style.top = newY + 'px';
+
+            const target = document.elementFromPoint(touch.clientX, touch.clientY);
+            const boardItem = target ? target.closest('.board-item') : null;
+            document.querySelectorAll('.board-item').forEach(el => el.classList.remove('drag-over'));
+            if (boardItem) {
+                const targetBoardId = boardItem.dataset.id;
+                if (targetBoardId && targetBoardId !== boardId) {
+                    boardItem.classList.add('drag-over');
+                    dropTargetBoardId = targetBoardId;
+                } else {
+                    dropTargetBoardId = null;
+                }
+            } else {
+                dropTargetBoardId = null;
+            }
+
+            if (!dragState._saveTimer) {
+                dragState._saveTimer = setTimeout(() => {
+                    const board = data.boards[boardId];
+                    if (board && board.cards[cardId]) {
+                        board.cards[cardId].position = { x: newX, y: newY };
+                        saveData();
+                    }
+                    dragState._saveTimer = null;
+                }, 100);
+            }
+        }
+
+        function onDragEnd(e) {
+            if (!dragState) return;
+            const { card, boardId, cardId, moved } = dragState;
+            card.classList.remove('dragging');
+            card.style.zIndex = '';
+            // final save position
+            const board = data.boards[boardId];
+            if (board && board.cards[cardId]) {
+                const x = parseFloat(card.style.left) || 0;
+                const y = parseFloat(card.style.top) || 0;
+                board.cards[cardId].position = { x, y };
+                saveData();
+            }
+            if (dragState._saveTimer) {
+                clearTimeout(dragState._saveTimer);
+                dragState._saveTimer = null;
+            }
+            if (dropTargetBoardId && dropTargetBoardId !== boardId) {
+                moveCardToBoard(cardId, boardId, dropTargetBoardId);
+            }
+            document.querySelectorAll('.board-item').forEach(el => el.classList.remove('drag-over'));
+            dropTargetBoardId = null;
+            document.removeEventListener('mousemove', onDragMove);
+            document.removeEventListener('mouseup', onDragEnd);
+            dragState = null;
+        }
+
+        function onDragEndTouch(e) {
+            if (!dragState) return;
+            const { card, boardId, cardId, moved } = dragState;
+            card.classList.remove('dragging');
+            card.style.zIndex = '';
+            const board = data.boards[boardId];
+            if (board && board.cards[cardId]) {
+                const x = parseFloat(card.style.left) || 0;
+                const y = parseFloat(card.style.top) || 0;
+                board.cards[cardId].position = { x, y };
+                saveData();
+            }
+            if (dragState._saveTimer) {
+                clearTimeout(dragState._saveTimer);
+                dragState._saveTimer = null;
+            }
+            if (dropTargetBoardId && dropTargetBoardId !== boardId) {
+                moveCardToBoard(cardId, boardId, dropTargetBoardId);
+            }
+            document.querySelectorAll('.board-item').forEach(el => el.classList.remove('drag-over'));
+            dropTargetBoardId = null;
+            document.removeEventListener('touchmove', onDragMoveTouch);
+            document.removeEventListener('touchend', onDragEndTouch);
+            dragState = null;
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  EXTERNAL DRAG & DROP (images from web / files)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const canvasWrapper = document.getElementById('canvas-wrapper');
+
+        canvasWrapper.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            canvasWrapper.classList.add('drag-over');
+        });
+
+        canvasWrapper.addEventListener('dragleave', (e) => {
+            canvasWrapper.classList.remove('drag-over');
+        });
+
+        canvasWrapper.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            canvasWrapper.classList.remove('drag-over');
+            const board = getCurrentBoard();
+            if (!board) {
+                alert('Create a board first!');
+                return;
+            }
+
+            const items = e.dataTransfer.items;
+            const files = e.dataTransfer.files;
+            let imageFile = null;
+            for (let i = 0; i < files.length; i++) {
+                if (files[i].type.startsWith('image/')) {
+                    imageFile = files[i];
+                    break;
+                }
+            }
+
+            if (imageFile) {
+                const dataUrl = await readFileAsDataURL(imageFile);
+                if (dataUrl) {
+                    const pos = getDropPosition(e);
+                    addCard(board.id, 'image', {
+                        data: dataUrl,
+                        name: imageFile.name,
+                        size: imageFile.size,
+                    }, pos);
+                }
+                return;
+            }
+
+            const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+            if (url && url.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)/i)) {
+                const pos = getDropPosition(e);
+                try {
+                    const blob = await fetchImageAsBlob(url);
+                    const dataUrl = await readBlobAsDataURL(blob);
+                    const name = url.split('/').pop() || 'image';
+                    addCard(board.id, 'image', {
+                        data: dataUrl,
+                        name: name,
+                        size: blob.size,
+                    }, pos);
+                } catch (err) {
+                    alert('Could not load image from URL. Try saving and uploading manually.');
+                }
+                return;
+            }
+
+            if (url && url.startsWith('http')) {
+                try {
+                    const resp = await fetch(url, { method: 'HEAD' });
+                    const contentType = resp.headers.get('content-type');
+                    if (contentType && contentType.startsWith('image/')) {
+                        const blob = await fetchImageAsBlob(url);
+                        const dataUrl = await readBlobAsDataURL(blob);
+                        const pos = getDropPosition(e);
+                        const name = url.split('/').pop() || 'image';
+                        addCard(board.id, 'image', {
+                            data: dataUrl,
+                            name: name,
+                            size: blob.size,
+                        }, pos);
+                        return;
+                    }
+                } catch (_) { /* ignore */ }
+            }
+
+            alert('Drop an image file or image URL to create an image card.');
+        });
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  PASTE FROM CLIPBOARD
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        document.addEventListener('paste', async (e) => {
+            const board = getCurrentBoard();
+            if (!board) {
+                alert('Create a board first!');
+                return;
+            }
+            const items = e.clipboardData.items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.startsWith('image/')) {
+                    const file = items[i].getAsFile();
+                    if (file) {
+                        const dataUrl = await readFileAsDataURL(file);
+                        if (dataUrl) {
+                            const pos = { x: 100 + Math.random() * 200, y: 100 + Math.random() * 200 };
+                            addCard(board.id, 'image', {
+                                data: dataUrl,
+                                name: 'Pasted image',
+                                size: file.size,
+                            }, pos);
+                            return;
+                        }
+                    }
+                }
+            }
+        });
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  HELPERS FOR EXTERNAL IMAGES
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        function readFileAsDataURL(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => resolve(null);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function readBlobAsDataURL(blob) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => resolve(null);
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        async function fetchImageAsBlob(url) {
+            const resp = await fetch(url, { mode: 'cors' });
+            if (!resp.ok) throw new Error('Network error');
+            return await resp.blob();
+        }
+
+        function getDropPosition(e) {
+            const wrapperRect = wrapper.getBoundingClientRect();
+            const scale = viewState.scale;
+            const tx = viewState.x;
+            const ty = viewState.y;
+            const mouseX = e.clientX - wrapperRect.left;
+            const mouseY = e.clientY - wrapperRect.top;
+            const canvasX = (mouseX - tx) / scale;
+            const canvasY = (mouseY - ty) / scale;
+            return { x: Math.max(20, canvasX - 120), y: Math.max(20, canvasY - 80) };
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  LIGHTBOX
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const lightbox = document.getElementById('lightbox');
+        const lightboxImg = document.getElementById('lightboxImg');
+
+        function openLightbox(src) {
+            lightboxImg.src = src;
+            lightbox.classList.add('open');
+        }
+
+        lightbox.addEventListener('click', () => {
+            lightbox.classList.remove('open');
+            lightboxImg.src = '';
+        });
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  EXPORT FUNCTIONS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        async function exportAsPNG() {
+            const board = getCurrentBoard();
+            if (!board) { alert('No board to export.'); return; }
+            const canvasEl = document.getElementById('canvas');
+            // Temporarily reset transform to capture all cards at natural size
+            const origTransform = container.style.transform;
+            container.style.transform = 'none';
+            // Wait for reflow
+            await new Promise(r => requestAnimationFrame(r));
+            // Capture the canvas (which contains all cards)
+            const captureEl = canvasEl;
+            try {
+                const canvas = await html2canvas(captureEl, {
+                    useCORS: true,
+                    logging: false,
+                    scale: 2,
+                    backgroundColor: getComputedStyle(document.body).getPropertyValue('--bg-primary').trim() || '#f4f6f9',
+                    onclone: (clonedDoc) => {
+                        // Ensure cloned elements have proper styles
+                    }
+                });
+                const link = document.createElement('a');
+                link.download = `board_${board.name}_export.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } catch (err) {
+                console.error(err);
+                alert('Error exporting image.');
+            } finally {
+                container.style.transform = origTransform;
+                applyTransform(); // reapply
+            }
+        }
+
+        async function exportAsPDF() {
+            const board = getCurrentBoard();
+            if (!board) { alert('No board to export.'); return; }
+            const canvasEl = document.getElementById('canvas');
+            const origTransform = container.style.transform;
+            container.style.transform = 'none';
+            await new Promise(r => requestAnimationFrame(r));
+            try {
+                const canvas = await html2canvas(canvasEl, {
+                    useCORS: true,
+                    logging: false,
+                    scale: 2,
+                    backgroundColor: getComputedStyle(document.body).getPropertyValue('--bg-primary').trim() || '#f4f6f9',
+                });
+                const imgData = canvas.toDataURL('image/png');
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('landscape', 'px', [canvas.width, canvas.height]);
+                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+                pdf.save(`board_${board.name}_export.pdf`);
+            } catch (err) {
+                console.error(err);
+                alert('Error exporting PDF.');
+            } finally {
+                container.style.transform = origTransform;
+                applyTransform();
+            }
+        }
+
+        function exportAsText() {
+            const board = getCurrentBoard();
+            if (!board) { alert('No board to export.'); return; }
+            const cards = board.cards || {};
+            let textContent = `Board: ${board.name}\n`;
+            textContent += `Exported: ${new Date().toLocaleString()}\n`;
+            textContent += `─'.repeat(40)}\n\n`;
+            for (const id in cards) {
+                const card = cards[id];
+                const type = card.type;
+                let content = '';
+                if (type === 'text') {
+                    content = card.content?.text || '';
+                } else if (type === 'todo') {
+                    const items = card.content?.items || [];
+                    content = items.map(item => (item.checked ? '[x] ' : '[ ] ') + item.text).join('\n');
+                } else if (type === 'link') {
+                    const url = card.content?.url || '';
+                    const title = card.content?.title || '';
+                    const desc = card.content?.description || '';
+                    content = `Title: ${title}\nURL: ${url}\nDescription: ${desc}`;
+                } else if (type === 'image') {
+                    content = `Image: ${card.content?.name || 'Unnamed'}`;
+                } else if (type === 'file') {
+                    content = `File: ${card.content?.name || 'Unnamed'} (${formatFileSize(card.content?.size || 0)})`;
+                } else {
+                    content = 'Unsupported card type';
+                }
+                textContent += `--- ${type.toUpperCase()} ---\n${content}\n\n`;
+            }
+            const blob = new Blob([textContent], { type: 'text/plain' });
+            const link = document.createElement('a');
+            link.download = `board_${board.name}_export.txt`;
+            link.href = URL.createObjectURL(blob);
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  FILE UPLOAD HANDLER
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const files = this.files;
+            if (!files || files.length === 0) return;
+            const targetCardId = this.dataset.targetCardId;
+            const targetBoardId = this.dataset.targetBoardId;
+            const board = data.boards[targetBoardId];
+            if (!board || !board.cards[targetCardId]) {
+                this.value = '';
+                return;
+            }
+            const card = board.cards[targetCardId];
+            const file = files[0];
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                const dataUrl = ev.target.result;
+                if (dataUrl.length > 5 * 1024 * 1024) {
+                    if (!confirm('File is large (>5MB). It may exceed localStorage limits. Continue?')) {
+                        return;
+                    }
+                }
+                if (card.type === 'image') {
+                    card.content = {
+                        data: dataUrl,
+                        name: file.name,
+                        size: file.size,
+                    };
+                } else if (card.type === 'file') {
+                    card.content = {
+                        data: dataUrl,
+                        name: file.name,
+                        size: file.size,
+                    };
+                }
+                saveData();
+                renderAll();
+                document.getElementById('fileInput').value = '';
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  MODAL SYSTEM (for adding cards)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalContent = document.getElementById('modalContent');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalBody = document.getElementById('modalBody');
+        const modalConfirm = document.getElementById('modalConfirm');
+        const modalCancel = document.getElementById('modalCancel');
+
+        let modalResolve = null;
+        let modalType = 'text';
+
+        function openModal(type) {
+            return new Promise((resolve) => {
+                modalResolve = resolve;
+                modalType = type;
+                const labels = {
+                    text: 'Add Text Note',
+                    todo: 'Add Todo List',
+                    image: 'Add Image',
+                    link: 'Add Link',
+                    file: 'Add File',
+                };
+                modalTitle.textContent = labels[type] || 'Add Card';
+                modalBody.innerHTML = buildModalBody(type);
+                modalOverlay.classList.add('open');
+                const firstInput = modalBody.querySelector('input, textarea');
+                if (firstInput) setTimeout(() => firstInput.focus(), 100);
+            });
+        }
+
+        function buildModalBody(type) {
+            switch (type) {
+                case 'text':
+                    return `<label>Content</label><textarea id="modalTextInput" rows="4" placeholder="Write your note…"></textarea>`;
+                case 'todo':
+                    return `<label>Tasks (one per line)</label><textarea id="modalTodoInput" rows="5" placeholder="Task 1&#10;Task 2&#10;Task 3"></textarea>`;
+                case 'image':
+                    return `<label>Image URL</label><input id="modalImageInput" placeholder="https://example.com/image.jpg" /><div style="margin-top:8px;font-size:0.8rem;color:var(--text-secondary);">You can also drag & drop images from web pages or paste from clipboard directly onto the canvas.</div>`;
+                case 'link':
+                    return `<label>URL</label><input id="modalLinkUrl" placeholder="https://example.com" /><label>Title</label><input id="modalLinkTitle" placeholder="Title" /><label>Description</label><input id="modalLinkDesc" placeholder="Description" />`;
+                case 'file':
+                    return `<label>File</label><div style="padding:12px;background:var(--toolbar-bg);border-radius:8px;border:1px dashed var(--border-color);text-align:center;color:var(--text-secondary);font-size:0.85rem;">Upload via the card after creation.</div>`;
+                default:
+                    return '';
+            }
+        }
+
+        modalCancel.addEventListener('click', closeModal);
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) closeModal();
+        });
+        modalConfirm.addEventListener('click', confirmModal);
+
+        function closeModal() {
+            modalOverlay.classList.remove('open');
+            if (modalResolve) {
+                modalResolve(null);
+                modalResolve = null;
+            }
+        }
+
+        async function confirmModal() {
+            if (!modalResolve) return;
+            let result = null;
+            switch (modalType) {
+                case 'text': {
+                    const val = document.getElementById('modalTextInput')?.value || '';
+                    result = { type: 'text', content: { text: val } };
+                    break;
+                }
+                case 'todo': {
+                    const val = document.getElementById('modalTodoInput')?.value || '';
+                    const items = val.split('\n').filter(s => s.trim()).map(s => ({
+                        id: 't_' + (data.nextTodoId++),
+                        text: s.trim(),
+                        checked: false,
+                    }));
+                    result = { type: 'todo', content: { items } };
+                    break;
+                }
+                case 'image': {
+                    const url = document.getElementById('modalImageInput')?.value || '';
+                    if (url) {
+                        try {
+                            const blob = await fetchImageAsBlob(url);
+                            const dataUrl = await readBlobAsDataURL(blob);
+                            const name = url.split('/').pop() || 'image';
+                            result = { type: 'image', content: { data: dataUrl, name, size: blob.size } };
+                        } catch (_) {
+                            alert('Could not load image from URL. You can drag & drop images instead.');
+                            closeModal();
+                            return;
+                        }
+                    } else {
+                        result = { type: 'image', content: { data: '', name: '', size: 0 } };
+                    }
+                    break;
+                }
+                case 'link': {
+                    const url = document.getElementById('modalLinkUrl')?.value || '';
+                    const title = document.getElementById('modalLinkTitle')?.value || '';
+                    const desc = document.getElementById('modalLinkDesc')?.value || '';
+                    result = { type: 'link', content: { url, title, description: desc } };
+                    break;
+                }
+                case 'file': {
+                    result = { type: 'file', content: { data: '', name: '', size: 0 } };
+                    break;
+                }
+                default:
+                    result = null;
+            }
+            modalOverlay.classList.remove('open');
+            const resolve = modalResolve;
+            modalResolve = null;
+            resolve(result);
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  TOOLBAR: ADD CARD
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        document.querySelectorAll('#topbar .toolbar-group button[data-type]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const board = getCurrentBoard();
+                if (!board) {
+                    alert('Create a board first!');
+                    return;
+                }
+                const type = btn.dataset.type;
+                const result = await openModal(type);
+                if (!result) return;
+                addCard(board.id, result.type, result.content);
+            });
+        });
+
+        // Export buttons
+        document.getElementById('exportPdfBtn').addEventListener('click', exportAsPDF);
+        document.getElementById('exportPngBtn').addEventListener('click', exportAsPNG);
+        document.getElementById('exportTxtBtn').addEventListener('click', exportAsText);
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  BOARD ACTIONS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        document.getElementById('addBoardBtn').addEventListener('click', () => {
+            const name = prompt('Board name:');
+            if (name !== null) {
+                createBoard(name.trim() || 'Untitled');
+            }
+        });
+
+        document.getElementById('exportAllBtn').addEventListener('click', () => {
+            const json = JSON.stringify(data, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `milanote_backup_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(a.href);
+        });
+
+        document.getElementById('importBtn').addEventListener('click', () => {
+            document.getElementById('importFileInput').click();
+        });
+
+        document.getElementById('importFileInput').addEventListener('change', function(e) {
+            const file = this.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                try {
+                    const imported = JSON.parse(ev.target.result);
+                    if (imported.boards && typeof imported.boards === 'object') {
+                        if (!confirm('This will replace ALL current data. Continue?')) return;
+                        data.boards = imported.boards || {};
+                        data.boardOrder = imported.boardOrder || Object.keys(data.boards);
+                        data.currentBoardId = imported.currentBoardId || Object.keys(data.boards)[0] || null;
+                        data.nextCardId = imported.nextCardId || 1;
+                        data.nextBoardId = imported.nextBoardId || 1;
+                        data.nextTodoId = imported.nextTodoId || 1;
+                        saveData();
+                        renderAll();
+                        resetView();
+                        alert('Import successful!');
+                    } else {
+                        alert('Invalid data format.');
+                    }
+                } catch (_) {
+                    alert('Error reading file.');
+                }
+                document.getElementById('importFileInput').value = '';
+            };
+            reader.readAsText(file);
+        });
+
+        document.getElementById('clearAllBtn').addEventListener('click', () => {
+            if (confirm('Delete ALL boards and cards? This cannot be undone.')) {
+                if (confirm('Are you sure?')) {
+                    data = defaultData();
+                    saveData();
+                    renderAll();
+                    resetView();
+                }
+            }
+        });
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  DARK THEME
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const themeLabel = document.getElementById('themeLabel');
+        let darkMode = localStorage.getItem('milanote_dark') === 'true';
+
+        function applyTheme() {
+            if (darkMode) {
+                document.body.classList.add('dark-theme');
+                themeIcon.textContent = '☀️';
+                themeLabel.textContent = 'Light';
+            } else {
+                document.body.classList.remove('dark-theme');
+                themeIcon.textContent = '🌙';
+                themeLabel.textContent = 'Dark';
+            }
+            localStorage.setItem('milanote_dark', darkMode);
+        }
+
+        themeToggle.addEventListener('click', () => {
+            darkMode = !darkMode;
+            applyTheme();
+        });
+
+        applyTheme();
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  KEYBOARD SHORTCUTS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (modalOverlay.classList.contains('open')) closeModal();
+                if (lightbox.classList.contains('open')) lightbox.classList.remove('open');
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                saveData();
+                const btn = document.getElementById('exportAllBtn');
+                const orig = btn.textContent;
+                btn.textContent = '✓ Saved';
+                setTimeout(() => btn.textContent = orig, 1200);
+            }
+        });
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  INIT
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        if (Object.keys(data.boards).length === 0) {
+            createBoard('My First Board');
+        } else if (!data.currentBoardId || !data.boards[data.currentBoardId]) {
+            const first = Object.keys(data.boards)[0];
+            if (first) data.currentBoardId = first;
+            saveData();
+        }
+        // ensure boardOrder is up to date
+        const existing = Object.keys(data.boards);
+        data.boardOrder = data.boardOrder.filter(id => existing.includes(id));
+        existing.forEach(id => {
+            if (!data.boardOrder.includes(id)) data.boardOrder.push(id);
+        });
+        saveData();
+
+        renderAll();
+        resetView();
+
+        console.log('📋 Milanote Clone loaded. Data:', data);
+        console.log('💾 Data is stored in localStorage under key:', STORAGE_KEY);
+        console.log('📤 Use "Export All" to backup, "Import" to restore.');
+        console.log('🔄 Drag cards to sidebar to move them between boards.');
+        console.log('📌 Drag board names in sidebar to reorder them.');
+        console.log('🖼️ Drag images from web or paste from clipboard to create image cards instantly.');
+        console.log('🔍 Pan with mouse drag, zoom with scroll or buttons.');
+        console.log('🌙 Toggle dark theme in sidebar.');
+        console.log('📄 Export board as PDF, PNG, or TXT from topbar.');
+    </script>
+</body>
+</html>
