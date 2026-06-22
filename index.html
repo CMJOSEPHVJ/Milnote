@@ -1931,7 +1931,8 @@
                     const isDataUrl = dataUrl.startsWith('data:');
                     if (dataUrl) {
                         const imgAttrs = isDataUrl ? '' : `referrerpolicy="no-referrer" crossorigin="anonymous"`;
-                        const isPinterest = dataUrl.includes('pinimg.com') || dataUrl.includes('pinterest.com');
+                        const isPinterest = dataUrl.toLowerCase().includes('pinimg.com') || dataUrl.toLowerCase().includes(
+                            'pinterest.com');
                         const imgSrc = isPinterest ? dataUrl.replace(/&/g, '&amp;') : dataUrl;
                         body = `
                             <div class="image-preview">
@@ -2299,6 +2300,15 @@
 
         let dragCounter = 0;
 
+        // Helper to detect CORS-blocked domains (case-insensitive)
+        function isCorsBlockedDomain(url) {
+            const lower = url.toLowerCase();
+            const blocked = ['pinimg.com', 'pinterest.com', 'i.pinimg.com', 'flickr.com', 'staticflickr.com', 'imgur.com',
+                'i.imgur.com'
+            ];
+            return blocked.some(domain => lower.includes(domain));
+        }
+
         canvasWrapper.addEventListener('dragenter', (e) => {
             e.preventDefault();
             dragCounter++;
@@ -2402,20 +2412,18 @@
 
             if (imageUrl) {
                 const pos = getDropPosition(e);
-                // Check if it's a Pinterest URL - skip fetch to avoid CORS error
-                const isPinterest = imageUrl.includes('pinimg.com') || imageUrl.includes('pinterest.com');
-                if (isPinterest) {
-                    // Directly use as external image
+                // Check if CORS-blocked domain
+                if (isCorsBlockedDomain(imageUrl)) {
                     addCard(board.id, 'image', {
                         data: imageUrl,
-                        name: 'Pinterest image',
+                        name: 'External image',
                         external: true,
                     }, pos);
-                    showToast(`🖼️ Pinterest image added (thumbnail will load)`, 3000);
+                    showToast(`🖼️ Image added (external) — thumbnail will load`, 3000);
                     return;
                 }
 
-                // Try to fetch with CORS first
+                // Try to fetch with CORS
                 try {
                     const blob = await fetchImageAsBlob(imageUrl);
                     if (blob && blob.type.startsWith('image/')) {
@@ -2430,7 +2438,7 @@
                         return;
                     }
                 } catch (_) {
-                    // CORS failed, fall through to external URL method
+                    // Fallback to external
                 }
 
                 // Fallback: store as external image
@@ -3083,11 +3091,10 @@
                 case 'image': {
                     const url = document.getElementById('modalImageInput')?.value || '';
                     if (url) {
-                        const isPinterest = url.includes('pinimg.com') || url.includes('pinterest.com');
-                        if (isPinterest) {
-                            result = { type: 'image', content: { data: url, name: 'Pinterest image', external: true,
+                        if (isCorsBlockedDomain(url)) {
+                            result = { type: 'image', content: { data: url, name: 'External image', external: true,
                                     size: 0 } };
-                            showToast('🖼️ Pinterest image added (thumbnail will load)', 3000);
+                            showToast('🖼️ Image added (external) — thumbnail will load', 3000);
                         } else {
                             try {
                                 const blob = await fetchImageAsBlob(url);
@@ -3321,6 +3328,7 @@
         console.log('⬇️ Download individual items with the download button on each card.');
         console.log('📦 Download all as ZIP with the "ZIP" button.');
         console.log('📤 Upload all to Telegram with the "Telegram" button.');
+        console.log('🖼️ External images from CORS-blocked domains (Pinterest, Imgur, etc.) are handled as external URLs without fetch.');
     </script>
 </body>
 </html>
