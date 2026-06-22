@@ -8,6 +8,8 @@
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js">
+    </script>
     <style>
         /* ─── CSS Variables ─── */
         :root {
@@ -851,7 +853,7 @@
             background: var(--modal-bg);
             border-radius: 20px;
             padding: 32px 36px;
-            max-width: 480px;
+            max-width: 520px;
             width: 90%;
             box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25);
             animation: slideUp 0.25s ease;
@@ -1077,6 +1079,26 @@
         .text-muted {
             color: var(--text-secondary);
         }
+        .download-all-progress {
+            position: fixed;
+            bottom: 140px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--toast-bg);
+            color: var(--toast-text);
+            padding: 12px 24px;
+            border-radius: 12px;
+            z-index: 10002;
+            font-size: 0.9rem;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            max-width: 90%;
+            text-align: center;
+        }
+        .download-all-progress.show {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -1111,6 +1133,9 @@
                 <button data-type="link"><span class="icon">🔗</span> Link</button>
                 <button data-type="file"><span class="icon">📎</span> File</button>
                 <span class="divider"></span>
+                <button id="downloadAllBtn" title="Download all as ZIP"><span class="icon">📥</span> ZIP</button>
+                <button id="telegramUploadBtn" title="Upload to Telegram"><span class="icon">📤</span> Telegram</button>
+                <span class="divider"></span>
                 <button id="exportPdfBtn" title="Export as PDF"><span class="icon">📄</span> PDF</button>
                 <button id="exportPngBtn" title="Export as Image"><span class="icon">🖼️</span> PNG</button>
                 <button id="exportTxtBtn" title="Export as Text"><span class="icon">📝</span> TXT</button>
@@ -1144,19 +1169,29 @@
     <!-- ─── TOAST ─── -->
     <div id="toast-container"></div>
 
+    <!-- ─── DOWNLOAD ALL PROGRESS ─── -->
+    <div id="downloadAllProgress" class="download-all-progress">Preparing download…</div>
+
     <!-- ─── LIGHTBOX ─── -->
     <div class="lightbox" id="lightbox">
         <img id="lightboxImg" src="" alt="Full size" />
     </div>
 
-    <!-- ─── MODAL ─── -->
-    <div class="modal-overlay" id="modalOverlay">
-        <div class="modal" id="modalContent">
-            <h2 id="modalTitle">Add Card</h2>
-            <div id="modalBody"></div>
+    <!-- ─── MODAL (Telegram) ─── -->
+    <div class="modal-overlay" id="telegramModal">
+        <div class="modal">
+            <h2>📤 Upload to Telegram</h2>
+            <p style="font-size:0.9rem;color:var(--text-secondary);margin-bottom:12px;">Send all images and files from this board to a Telegram channel.</p>
+            <label>Bot Token</label>
+            <input id="telegramToken" placeholder="e.g. 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" />
+            <label>Channel ID or Chat ID</label>
+            <input id="telegramChatId" placeholder="e.g. @my_channel or -1001234567890" />
+            <div style="margin-top:12px;font-size:0.8rem;color:var(--text-secondary);">
+                💡 You need a Telegram Bot. Create one with <a href="https://t.me/BotFather" target="_blank" style="color:var(--accent);">@BotFather</a> and get the token. For a channel, add the bot as admin.
+            </div>
             <div class="modal-actions">
-                <button class="btn-cancel" id="modalCancel">Cancel</button>
-                <button class="btn-confirm" id="modalConfirm">Add</button>
+                <button class="btn-cancel" id="telegramCancel">Cancel</button>
+                <button class="btn-confirm" id="telegramSend">Upload</button>
             </div>
         </div>
     </div>
@@ -1667,17 +1702,26 @@
                 makeResizable(handle);
             });
 
-            // Attach card event listeners (delete, edit, etc.)
+            // Attach card event listeners (delete, edit, download, etc.)
             canvas.querySelectorAll('.card').forEach(el => {
                 const cardId = el.dataset.cardId;
                 const boardId = el.dataset.boardId;
                 const type = el.dataset.type;
 
+                // Delete
                 el.querySelector('.delete-card')?.addEventListener('click', () => {
                     if (confirm('Delete this card?')) {
                         deleteCard(boardId, cardId);
                     }
                 });
+
+                // Download card (image or file)
+                const dlBtn = el.querySelector('.download-card');
+                if (dlBtn) {
+                    dlBtn.addEventListener('click', () => {
+                        downloadSingleCard(boardId, cardId);
+                    });
+                }
 
                 if (type === 'text') {
                     const ta = el.querySelector('.card-body textarea');
@@ -1742,12 +1786,9 @@
                     const retryBtn = el.querySelector('.retry-btn');
                     if (retryBtn) {
                         retryBtn.addEventListener('click', () => {
-                            // Re-render the card with the same URL
                             const cardData = data.boards[boardId]?.cards[cardId];
                             if (cardData) {
-                                // Force a re-render by updating content
                                 const content = { ...cardData.content };
-                                // Toggle external flag to force re-render
                                 content._refresh = Date.now();
                                 updateCardContent(boardId, cardId, content);
                             }
@@ -1792,9 +1833,9 @@
                 }
 
                 if (type === 'file') {
-                    const dlBtn = el.querySelector('.download-file');
-                    if (dlBtn) {
-                        dlBtn.addEventListener('click', () => {
+                    const dlBtnFile = el.querySelector('.download-file');
+                    if (dlBtnFile) {
+                        dlBtnFile.addEventListener('click', () => {
                             const card = data.boards[boardId]?.cards[cardId];
                             if (card?.content?.data) {
                                 const a = document.createElement('a');
@@ -1808,9 +1849,9 @@
                             }
                         });
                     }
-                    const uploadBtn = el.querySelector('.upload-file-btn');
-                    if (uploadBtn) {
-                        uploadBtn.addEventListener('click', () => {
+                    const uploadBtnFile = el.querySelector('.upload-file-btn');
+                    if (uploadBtnFile) {
+                        uploadBtnFile.addEventListener('click', () => {
                             const fileInput = document.getElementById('fileInput');
                             fileInput.accept = '*/*';
                             fileInput.multiple = false;
@@ -1852,11 +1893,8 @@
                     const name = card.content?.name || '';
                     const isExternal = card.content?.external || false;
                     const isDataUrl = dataUrl.startsWith('data:');
-                    // If external, we need to try loading the image directly
                     if (dataUrl) {
-                        // For external images, use referrerPolicy and crossorigin to help loading
                         const imgAttrs = isDataUrl ? '' : `referrerpolicy="no-referrer" crossorigin="anonymous"`;
-                        // Check if it's a URL that might need special handling
                         const isPinterest = dataUrl.includes('pinimg.com') || dataUrl.includes('pinterest.com');
                         const imgSrc = isPinterest ? dataUrl.replace(/&/g, '&amp;') : dataUrl;
                         body = `
@@ -1922,6 +1960,12 @@
                 file: '📎 File'
             };
 
+            // Add download button for image and file cards
+            let downloadBtn = '';
+            if (card.type === 'image' || card.type === 'file') {
+                downloadBtn = `<button class="download-card" title="Download this item">⬇</button>`;
+            }
+
             return `<div class="card ${card.type}-card" 
                         data-card-id="${card.id}" 
                         data-board-id="${boardId}" 
@@ -1930,6 +1974,7 @@
                     <div class="card-header">
                         <span class="card-type-badge">${typeLabels[card.type] || card.type}</span>
                         <div class="card-actions">
+                            ${downloadBtn}
                             <button class="delete-card" title="Delete card">✕</button>
                         </div>
                     </div>
@@ -2342,16 +2387,13 @@
                     // CORS failed, fall through to external URL method
                 }
 
-                // If CORS fails, try to load as external image URL directly
-                // Clean up the URL
+                // If CORS fails, store as external URL (will show thumbnail)
+                // Clean up URL for Pinterest etc.
                 let cleanUrl = imageUrl;
-                // Handle Pinterest URLs specially
                 if (cleanUrl.includes('pinimg.com') || cleanUrl.includes('pinterest.com')) {
-                    // Try to extract the raw image URL
                     try {
                         const urlObj = new URL(cleanUrl);
                         if (urlObj.hostname.includes('pinimg.com')) {
-                            // Pinterest image URLs are usually fine
                             cleanUrl = urlObj.href;
                         }
                     } catch (_) { /* ignore */ }
@@ -2361,7 +2403,7 @@
                     name: 'External image',
                     external: true,
                 }, pos);
-                showToast(`🖼️ Image added (external) — CORS prevented download, but thumbnail should load`, 3000);
+                showToast(`🖼️ Image added (external) — thumbnail should load`, 3000);
                 return;
             }
 
@@ -2494,6 +2536,257 @@
             lightbox.classList.remove('open');
             lightboxImg.src = '';
         });
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  DOWNLOAD FUNCTIONS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        function downloadSingleCard(boardId, cardId) {
+            const board = data.boards[boardId];
+            if (!board) return;
+            const card = board.cards[cardId];
+            if (!card) return;
+            const content = card.content;
+            if (!content || !content.data) {
+                showToast('❌ No data to download', 2000);
+                return;
+            }
+            // If it's a data URL, download directly
+            if (content.data.startsWith('data:')) {
+                const a = document.createElement('a');
+                a.href = content.data;
+                a.download = content.name || 'download';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                showToast(`✅ Downloaded "${content.name || 'file'}"`, 1500);
+            } else {
+                // External URL: open in new tab or fetch
+                const a = document.createElement('a');
+                a.href = content.data;
+                a.target = '_blank';
+                a.download = content.name || 'download';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                showToast(`✅ Opened "${content.name || 'file'}" in new tab`, 1500);
+            }
+        }
+
+        async function downloadAllBoard() {
+            const board = getCurrentBoard();
+            if (!board) {
+                showToast('❌ No board to download.', 2000);
+                return;
+            }
+            const cards = board.cards || {};
+            const imageData = [];
+            const fileData = [];
+
+            // Collect all images and files with data URLs
+            for (const id in cards) {
+                const card = cards[id];
+                if ((card.type === 'image' || card.type === 'file') && card.content && card.content.data) {
+                    if (card.content.data.startsWith('data:')) {
+                        // Local data URL
+                        const entry = {
+                            name: card.content.name || 'untitled',
+                            data: card.content.data,
+                            type: card.type,
+                        };
+                        if (card.type === 'image') imageData.push(entry);
+                        else fileData.push(entry);
+                    } else {
+                        // External URL – we'll skip for zip (can't fetch due to CORS)
+                        // We'll add a text note in the zip
+                        fileData.push({
+                            name: card.content.name || 'external_url.txt',
+                            data: card.content.data,
+                            type: 'text',
+                            external: true,
+                        });
+                    }
+                }
+            }
+
+            if (imageData.length === 0 && fileData.length === 0) {
+                showToast('❌ No downloadable images or files found.', 2000);
+                return;
+            }
+
+            const progressEl = document.getElementById('downloadAllProgress');
+            progressEl.classList.add('show');
+            progressEl.textContent = 'Preparing ZIP…';
+
+            try {
+                const zip = new JSZip();
+                let count = 0;
+                const total = imageData.length + fileData.length;
+
+                // Add images
+                for (const item of imageData) {
+                    progressEl.textContent = `Adding ${item.name} (${count+1}/${total})…`;
+                    // Convert data URL to blob
+                    const blob = dataURLToBlob(item.data);
+                    const ext = item.name.split('.').pop() || 'png';
+                    const fileName = `${item.name}`;
+                    zip.file(fileName, blob);
+                    count++;
+                }
+
+                // Add files
+                for (const item of fileData) {
+                    if (item.external) {
+                        // For external URLs, add a text file with the URL
+                        zip.file(`${item.name}.txt`, `External URL: ${item.data}`);
+                    } else {
+                        progressEl.textContent = `Adding ${item.name} (${count+1}/${total})…`;
+                        const blob = dataURLToBlob(item.data);
+                        zip.file(item.name, blob);
+                        count++;
+                    }
+                }
+
+                progressEl.textContent = 'Generating ZIP…';
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(zipBlob);
+                link.download = `board_${board.name}_export.zip`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+                showToast(`✅ Downloaded ${total} items as ZIP`, 2500);
+            } catch (err) {
+                console.error(err);
+                showToast('❌ Error creating ZIP.', 2500);
+            } finally {
+                progressEl.classList.remove('show');
+                progressEl.textContent = 'Preparing download…';
+            }
+        }
+
+        function dataURLToBlob(dataURL) {
+            const arr = dataURL.split(',');
+            const mime = arr[0].match(/:(.*?);/)[1];
+            const bstr = atob(arr[1]);
+            let n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            while (n--) {
+                u8arr[n] = bstr.charCodeAt(n);
+            }
+            return new Blob([u8arr], { type: mime });
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  TELEGRAM UPLOAD
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const telegramModal = document.getElementById('telegramModal');
+        const telegramToken = document.getElementById('telegramToken');
+        const telegramChatId = document.getElementById('telegramChatId');
+        const telegramCancel = document.getElementById('telegramCancel');
+        const telegramSend = document.getElementById('telegramSend');
+
+        telegramCancel.addEventListener('click', () => {
+            telegramModal.classList.remove('open');
+        });
+
+        telegramSend.addEventListener('click', async () => {
+            const token = telegramToken.value.trim();
+            const chatId = telegramChatId.value.trim();
+            if (!token || !chatId) {
+                showToast('❌ Please enter Bot Token and Channel ID.', 2000);
+                return;
+            }
+            telegramModal.classList.remove('open');
+            await uploadToTelegram(token, chatId);
+        });
+
+        async function uploadToTelegram(token, chatId) {
+            const board = getCurrentBoard();
+            if (!board) {
+                showToast('❌ No board to upload.', 2000);
+                return;
+            }
+            const cards = board.cards || {};
+            const items = [];
+
+            // Collect images and files with data URLs
+            for (const id in cards) {
+                const card = cards[id];
+                if ((card.type === 'image' || card.type === 'file') && card.content && card.content.data) {
+                    if (card.content.data.startsWith('data:')) {
+                        items.push({
+                            name: card.content.name || 'untitled',
+                            data: card.content.data,
+                            type: card.type,
+                        });
+                    } else {
+                        // External URL – we can't upload directly, but we can send as text
+                        items.push({
+                            name: card.content.name || 'external_url.txt',
+                            data: card.content.data,
+                            type: 'text',
+                            external: true,
+                        });
+                    }
+                }
+            }
+
+            if (items.length === 0) {
+                showToast('❌ No images or files to upload.', 2000);
+                return;
+            }
+
+            const progressEl = document.getElementById('downloadAllProgress');
+            progressEl.classList.add('show');
+            progressEl.textContent = 'Uploading to Telegram…';
+
+            let successCount = 0;
+            const total = items.length;
+
+            try {
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    progressEl.textContent = `Uploading ${item.name} (${i+1}/${total})…`;
+                    const url = `https://api.telegram.org/bot${token}/`;
+                    let formData = new FormData();
+                    formData.append('chat_id', chatId);
+
+                    if (item.external || item.type === 'text') {
+                        // Send as text
+                        const text = item.external ? `External file: ${item.data}` : `File: ${item.name}`;
+                        formData.append('text', text);
+                        const resp = await fetch(url + 'sendMessage', {
+                            method: 'POST',
+                            body: formData,
+                        });
+                        if (resp.ok) successCount++;
+                        else console.error('Telegram sendMessage failed', await resp.text());
+                    } else {
+                        // Send as photo or document
+                        const blob = dataURLToBlob(item.data);
+                        const fileType = item.type === 'image' ? 'photo' : 'document';
+                        const fileField = fileType === 'photo' ? 'photo' : 'document';
+                        formData.append(fileField, blob, item.name);
+                        const resp = await fetch(url + `send${fileType.charAt(0).toUpperCase() + fileType.slice(1)}`, {
+                            method: 'POST',
+                            body: formData,
+                        });
+                        if (resp.ok) successCount++;
+                        else console.error(`Telegram send${fileType} failed`, await resp.text());
+                    }
+                }
+                showToast(`✅ Uploaded ${successCount}/${total} items to Telegram`, 3000);
+            } catch (err) {
+                console.error(err);
+                showToast(`❌ Error uploading: ${err.message}`, 3000);
+            } finally {
+                progressEl.classList.remove('show');
+                progressEl.textContent = 'Preparing download…';
+            }
+        }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         //  EXPORT FUNCTIONS
@@ -2732,11 +3025,9 @@
                             const name = url.split('/').pop() || 'image';
                             result = { type: 'image', content: { data: dataUrl, name, size: blob.size } };
                         } catch (_) {
-                            // If CORS fails, store as external URL
                             result = { type: 'image', content: { data: url, name: 'External image', external: true,
                                     size: 0 } };
-                            showToast('🖼️ Image added as external (CORS prevented download, but thumbnail should load)',
-                            3000);
+                            showToast('🖼️ Image added as external (thumbnail should load)', 3000);
                         }
                     } else {
                         result = { type: 'image', content: { data: '', name: '', size: 0 } };
@@ -2764,9 +3055,10 @@
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        //  TOOLBAR: ADD CARD
+        //  TOOLBAR BUTTONS
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+        // Add card buttons
         document.querySelectorAll('#topbar .toolbar-group button[data-type]').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const board = getCurrentBoard();
@@ -2780,6 +3072,32 @@
                 addCard(board.id, result.type, result.content);
                 showToast(`✅ ${type.charAt(0).toUpperCase() + type.slice(1)} card added`, 1500);
             });
+        });
+
+        // Download All (ZIP)
+        document.getElementById('downloadAllBtn').addEventListener('click', downloadAllBoard);
+
+        // Telegram Upload
+        document.getElementById('telegramUploadBtn').addEventListener('click', () => {
+            const board = getCurrentBoard();
+            if (!board) {
+                showToast('❌ Create a board first!', 2000);
+                return;
+            }
+            // Pre-fill token from localStorage?
+            const savedToken = localStorage.getItem('telegram_token') || '';
+            const savedChat = localStorage.getItem('telegram_chat') || '';
+            telegramToken.value = savedToken;
+            telegramChatId.value = savedChat;
+            telegramModal.classList.add('open');
+        });
+
+        // Save Telegram credentials on send
+        telegramSend.addEventListener('click', () => {
+            const token = telegramToken.value.trim();
+            const chatId = telegramChatId.value.trim();
+            if (token) localStorage.setItem('telegram_token', token);
+            if (chatId) localStorage.setItem('telegram_chat', chatId);
         });
 
         // Export buttons
@@ -2895,6 +3213,7 @@
             if (e.key === 'Escape') {
                 if (modalOverlay.classList.contains('open')) closeModal();
                 if (lightbox.classList.contains('open')) lightbox.classList.remove('open');
+                if (telegramModal.classList.contains('open')) telegramModal.classList.remove('open');
             }
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
@@ -2928,9 +3247,12 @@
         console.log('🔄 Drag & drop images, PDFs, files, or text from anywhere.');
         console.log('🔍 Pan with mouse drag, zoom with scroll or buttons.');
         console.log('🌙 Toggle dark theme in sidebar.');
-        console.log('📄 Export board as PDF, PNG, or TXT from topbar.');
-        console.log('✋ Resize cards by dragging the bottom-right corner handle.');
-        console.log('🖼️ External images now show thumbnails even with CORS restrictions.');
+        console.log('📄 Export board as PDF, PNG, or TXT.');
+        console.log('✋ Resize cards by dragging the bottom-right corner.');
+        console.log('🖼️ External images now show thumbnails.');
+        console.log('⬇️ Download individual images/files with the download button on each card.');
+        console.log('📦 Download all as ZIP with the "ZIP" button.');
+        console.log('📤 Upload all to Telegram with the "Telegram" button.');
     </script>
 </body>
 </html>
