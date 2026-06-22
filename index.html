@@ -655,6 +655,35 @@
             overflow: hidden;
             white-space: nowrap;
         }
+        .card.image-card .image-error {
+            padding: 16px;
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        .card.image-card .image-error .error-link {
+            display: block;
+            word-break: break-all;
+            color: var(--accent);
+            text-decoration: underline;
+            cursor: pointer;
+            margin-top: 4px;
+        }
+        .card.image-card .image-error .retry-btn {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 6px 16px;
+            background: var(--accent);
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: 0.15s;
+        }
+        .card.image-card .image-error .retry-btn:hover {
+            background: var(--accent-hover);
+        }
         .card.image-card .upload-btn {
             display: block;
             padding: 16px;
@@ -671,36 +700,6 @@
             border-color: var(--accent);
             color: var(--accent);
             background: rgba(108, 92, 231, 0.05);
-        }
-        .card.image-card .external-url-badge {
-            font-size: 0.6rem;
-            color: var(--accent);
-            background: rgba(108, 92, 231, 0.1);
-            padding: 2px 8px;
-            border-radius: 12px;
-            margin-top: 4px;
-            display: inline-block;
-        }
-        .card.image-card .image-error {
-            padding: 20px;
-            text-align: center;
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-        }
-        .card.image-card .image-error .retry-btn {
-            display: inline-block;
-            margin-top: 8px;
-            padding: 6px 16px;
-            background: var(--accent);
-            color: #fff;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.75rem;
-            font-weight: 500;
-            transition: 0.15s;
-        }
-        .card.image-card .image-error .retry-btn:hover {
-            background: var(--accent-hover);
         }
 
         /* link card */
@@ -1805,6 +1804,24 @@
                             const img = preview.querySelector('img');
                             if (img && img.src) {
                                 openLightbox(img.src);
+                            } else {
+                                // If image failed, open the URL in new tab
+                                const link = preview.querySelector('.error-link');
+                                if (link) {
+                                    window.open(link.textContent, '_blank');
+                                }
+                            }
+                        });
+                    }
+                    // Retry button (click on .retry-btn) – implemented via the onerror handler re-render
+                    const retryBtn = el.querySelector('.retry-btn');
+                    if (retryBtn) {
+                        retryBtn.addEventListener('click', () => {
+                            const cardData = data.boards[boardId]?.cards[cardId];
+                            if (cardData) {
+                                const content = { ...cardData.content };
+                                content._refresh = Date.now();
+                                updateCardContent(boardId, cardId, content);
                             }
                         });
                     }
@@ -1817,17 +1834,6 @@
                             fileInput.dataset.targetCardId = cardId;
                             fileInput.dataset.targetBoardId = boardId;
                             fileInput.click();
-                        });
-                    }
-                    const retryBtn = el.querySelector('.retry-btn');
-                    if (retryBtn) {
-                        retryBtn.addEventListener('click', () => {
-                            const cardData = data.boards[boardId]?.cards[cardId];
-                            if (cardData) {
-                                const content = { ...cardData.content };
-                                content._refresh = Date.now();
-                                updateCardContent(boardId, cardId, content);
-                            }
                         });
                     }
                 }
@@ -1931,14 +1937,22 @@
                     const isDataUrl = dataUrl.startsWith('data:');
                     if (dataUrl) {
                         const imgAttrs = isDataUrl ? '' : `referrerpolicy="no-referrer" crossorigin="anonymous"`;
-                        const isPinterest = dataUrl.toLowerCase().includes('pinimg.com') || dataUrl.toLowerCase().includes(
-                            'pinterest.com');
+                        const lowerUrl = dataUrl.toLowerCase();
+                        const isPinterest = lowerUrl.includes('pinimg.com') || lowerUrl.includes('pinterest.com');
                         const imgSrc = isPinterest ? dataUrl.replace(/&/g, '&amp;') : dataUrl;
+                        // On error, show a message with the URL as a clickable link
+                        const errorHTML = `
+                            <div class="image-error">
+                                ⚠️ Image not available
+                                <a href="${escapeHTML(dataUrl)}" target="_blank" class="error-link">${escapeHTML(dataUrl)}</a>
+                                <button class="retry-btn">🔄 Retry</button>
+                            </div>
+                        `;
                         body = `
                             <div class="image-preview">
                                 <img src="${escapeHTML(imgSrc)}" alt="${escapeHTML(name)}" loading="lazy" 
                                      ${imgAttrs}
-                                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'image-error\\'>⚠️ Image could not be loaded from external source<br><button class=\\'retry-btn\\'>🔄 Retry</button></div>';" />
+                                     onerror="this.style.display='none'; this.parentElement.innerHTML='${errorHTML}';" />
                             </div>
                             <div class="image-name">${escapeHTML(name)} ${isExternal ? '🔗' : ''}</div>
                             <button class="upload-btn" style="margin-top:8px;">🔄 Change</button>
@@ -2309,6 +2323,38 @@
             return blocked.some(domain => lower.includes(domain));
         }
 
+        // Improved image URL extraction from drop data
+        function extractImageUrl(uriData, htmlData, textData) {
+            // 1. Check uri-list for image extensions or pinimg.com
+            if (uriData) {
+                const urls = uriData.split('\n').filter(u => u.trim());
+                for (const u of urls) {
+                    const lower = u.toLowerCase();
+                    if (lower.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)/i) || lower.includes('pinimg.com')) {
+                        return u;
+                    }
+                }
+            }
+            // 2. Check HTML for img src
+            if (htmlData) {
+                const imgMatch = htmlData.match(/<img[^>]+src=["']([^"']+)["']/i);
+                if (imgMatch) {
+                    const src = imgMatch[1];
+                    if (src && (src.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)/i) || src.includes('pinimg.com'))) {
+                        return src;
+                    }
+                }
+            }
+            // 3. Check plain text for image extensions or pinimg.com
+            if (textData) {
+                const lower = textData.toLowerCase();
+                if (lower.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)/i) || lower.includes('pinimg.com')) {
+                    return textData;
+                }
+            }
+            return null;
+        }
+
         canvasWrapper.addEventListener('dragenter', (e) => {
             e.preventDefault();
             dragCounter++;
@@ -2348,6 +2394,7 @@
             const files = e.dataTransfer.files;
             const items = e.dataTransfer.items;
 
+            // 1. Handle files
             if (files && files.length > 0) {
                 for (const file of files) {
                     if (file.type.startsWith('image/')) {
@@ -2388,31 +2435,16 @@
                 return;
             }
 
+            // 2. Extract image URL from data
             const textData = e.dataTransfer.getData('text/plain');
             const htmlData = e.dataTransfer.getData('text/html');
             const uriData = e.dataTransfer.getData('text/uri-list');
 
-            let imageUrl = null;
-            if (uriData) {
-                const urls = uriData.split('\n').filter(u => u.trim());
-                for (const u of urls) {
-                    if (u.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)/i) || u.startsWith('data:image')) {
-                        imageUrl = u;
-                        break;
-                    }
-                }
-            }
-            if (!imageUrl && htmlData) {
-                const imgMatch = htmlData.match(/<img[^>]+src=["']([^"']+)["']/i);
-                if (imgMatch) imageUrl = imgMatch[1];
-            }
-            if (!imageUrl && textData && textData.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)/i)) {
-                imageUrl = textData;
-            }
+            let imageUrl = extractImageUrl(uriData, htmlData, textData);
 
             if (imageUrl) {
                 const pos = getDropPosition(e);
-                // Check if CORS-blocked domain
+                // If it's a CORS-blocked domain, skip fetch and add as external
                 if (isCorsBlockedDomain(imageUrl)) {
                     addCard(board.id, 'image', {
                         data: imageUrl,
@@ -2441,7 +2473,7 @@
                     // Fallback to external
                 }
 
-                // Fallback: store as external image
+                // Fallback: add as external image
                 addCard(board.id, 'image', {
                     data: imageUrl,
                     name: 'External image',
@@ -2451,6 +2483,7 @@
                 return;
             }
 
+            // 3. Handle plain text (if not an image URL)
             if (textData && textData.trim().length > 0 && textData.length < 5000) {
                 const pos = getDropPosition(e);
                 addCard(board.id, 'text', {
@@ -2460,6 +2493,7 @@
                 return;
             }
 
+            // 4. Handle any URL as link card
             if (uriData) {
                 const urls = uriData.split('\n').filter(u => u.trim());
                 if (urls.length > 0) {
@@ -2602,6 +2636,7 @@
                 document.body.removeChild(a);
                 showToast(`✅ Downloaded "${content.name || 'file'}"`, 1500);
             } else {
+                // For external URLs, open in new tab
                 const a = document.createElement('a');
                 a.href = content.data;
                 a.target = '_blank';
@@ -3328,7 +3363,8 @@
         console.log('⬇️ Download individual items with the download button on each card.');
         console.log('📦 Download all as ZIP with the "ZIP" button.');
         console.log('📤 Upload all to Telegram with the "Telegram" button.');
-        console.log('🖼️ External images from CORS-blocked domains (Pinterest, Imgur, etc.) are handled as external URLs without fetch.');
+        console.log('🖼️ External images from CORS-blocked domains are handled without fetch.');
+        console.log('🔗 If an image fails to load, click the error link to open in new tab.');
     </script>
 </body>
 </html>
