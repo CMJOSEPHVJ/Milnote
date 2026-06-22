@@ -4,13 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Milanote Clone · Infinite Canvas</title>
-    <!-- Libraries for export -->
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js">
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
     </script>
     <style>
-        /* ─── CSS Variables (Light & Dark) ─── */
+        /* ─── CSS Variables ─── */
         :root {
             --bg-primary: #f4f6f9;
             --bg-secondary: #ffffff;
@@ -28,6 +27,10 @@
             --empty-text: #8b95a9;
             --modal-bg: #fff;
             --lightbox-bg: rgba(0, 0, 0, 0.85);
+            --drop-overlay: rgba(108, 92, 231, 0.12);
+            --drop-border: #6c5ce7;
+            --toast-bg: #1a1a2e;
+            --toast-text: #fff;
         }
         .dark-theme {
             --bg-primary: #12121a;
@@ -46,6 +49,10 @@
             --empty-text: #6b7280;
             --modal-bg: #1e1e2e;
             --lightbox-bg: rgba(0, 0, 0, 0.9);
+            --drop-overlay: rgba(108, 92, 231, 0.18);
+            --drop-border: #7c6cf0;
+            --toast-bg: #2a2a3e;
+            --toast-text: #eaeef2;
         }
 
         /* ─── RESET & BASE ─── */
@@ -256,6 +263,7 @@
             gap: 12px;
             flex-wrap: wrap;
             transition: background 0.3s, border-color 0.3s;
+            z-index: 2;
         }
         #topbar .board-title {
             font-size: 1.2rem;
@@ -313,7 +321,7 @@
             margin: 0 4px;
         }
 
-        /* ─── CANVAS WRAPPER (infinite canvas) ─── */
+        /* ─── CANVAS WRAPPER ─── */
         #canvas-wrapper {
             flex: 1;
             overflow: hidden;
@@ -325,10 +333,11 @@
             cursor: grab;
             transition: background 0.3s;
         }
-        #canvas-wrapper.drag-over {
-            background: rgba(108, 92, 231, 0.05);
-            outline: 3px dashed var(--accent);
+        #canvas-wrapper.drag-over-active {
+            background: var(--drop-overlay) !important;
+            outline: 3px dashed var(--drop-border) !important;
             outline-offset: -10px;
+            cursor: copy !important;
         }
         #canvas-wrapper.panning {
             cursor: grabbing;
@@ -348,6 +357,72 @@
             height: 100%;
             min-height: 100%;
             min-width: 100%;
+        }
+
+        /* ─── DROP ZONE OVERLAY ─── */
+        #drop-zone-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 20;
+            background: var(--drop-overlay);
+            border: 4px dashed var(--drop-border);
+            border-radius: 16px;
+            backdrop-filter: blur(4px);
+        }
+        #drop-zone-overlay.show {
+            display: flex;
+        }
+        #drop-zone-overlay .drop-content {
+            background: var(--bg-secondary);
+            padding: 24px 40px;
+            border-radius: 16px;
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+            text-align: center;
+        }
+        #drop-zone-overlay .drop-content .drop-icon {
+            font-size: 3rem;
+            margin-bottom: 8px;
+        }
+        #drop-zone-overlay .drop-content .drop-text {
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        #drop-zone-overlay .drop-content .drop-sub {
+            font-size: 0.8rem;
+            font-weight: 400;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* ─── TOAST ─── */
+        #toast-container {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10001;
+            background: var(--toast-bg);
+            color: var(--toast-text);
+            padding: 12px 24px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            font-size: 0.9rem;
+            font-weight: 500;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        #toast-container.show {
+            opacity: 1;
         }
 
         /* ─── CARDS ─── */
@@ -555,6 +630,15 @@
             border-color: var(--accent);
             color: var(--accent);
             background: rgba(108, 92, 231, 0.05);
+        }
+        .card.image-card .external-url-badge {
+            font-size: 0.6rem;
+            color: var(--accent);
+            background: rgba(108, 92, 231, 0.1);
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-top: 4px;
+            display: inline-block;
         }
 
         /* link card */
@@ -818,7 +902,7 @@
             line-height: 1.5;
         }
 
-        /* ─── ZOOM CONTROLS (overlay) ─── */
+        /* ─── ZOOM CONTROLS ─── */
         #zoom-controls {
             position: absolute;
             bottom: 24px;
@@ -907,6 +991,11 @@
                 min-width: 40px;
                 font-size: 0.7rem;
             }
+            #toast-container {
+                font-size: 0.8rem;
+                padding: 10px 16px;
+                bottom: 60px;
+            }
         }
         @media (max-width: 480px) {
             #sidebar {
@@ -971,10 +1060,16 @@
             </div>
             <div class="empty-state" id="emptyState">
                 <div class="big-icon">📂</div>
-                <h3>No cards yet</h3>
-                <p>Drag & drop images from the web, paste from clipboard, or click a card type above to add content.</p>
+                <h3>Drop anything here</h3>
+                <p>Drag & drop images, PDFs, files, or text from anywhere — or click a card type above.</p>
             </div>
-            <!-- Zoom controls -->
+            <div id="drop-zone-overlay">
+                <div class="drop-content">
+                    <div class="drop-icon">📥</div>
+                    <div class="drop-text">Drop to create a card</div>
+                    <div class="drop-sub">Image · PDF · File · Text</div>
+                </div>
+            </div>
             <div id="zoom-controls">
                 <button id="zoomOutBtn" title="Zoom Out">−</button>
                 <span class="zoom-level" id="zoomLevel">100%</span>
@@ -983,6 +1078,9 @@
             </div>
         </div>
     </div>
+
+    <!-- ─── TOAST ─── -->
+    <div id="toast-container"></div>
 
     <!-- ─── LIGHTBOX ─── -->
     <div class="lightbox" id="lightbox">
@@ -1001,7 +1099,7 @@
         </div>
     </div>
 
-    <!-- ─── FILE INPUTS (hidden) ─── -->
+    <!-- ─── FILE INPUTS ─── -->
     <input type="file" id="fileInput" style="display:none" accept="image/*,.*" multiple />
     <input type="file" id="importFileInput" style="display:none" accept=".json" />
 
@@ -1108,7 +1206,7 @@
                 data.currentBoardId = id;
                 saveData();
                 renderAll();
-                resetView(); // reset zoom/pan when switching boards
+                resetView();
             }
         }
 
@@ -1265,7 +1363,6 @@
             applyTransform();
         }
 
-        // Zoom in/out at center
         function zoomIn() {
             viewState.scale = Math.min(3, viewState.scale * 1.2);
             applyTransform();
@@ -1278,11 +1375,9 @@
 
         // Pan with mouse drag on background
         wrapper.addEventListener('mousedown', (e) => {
-            // Only pan if not clicking on a card or interactive element
-            const target = e.target;
-            if (target.closest('.card') || target.closest('button') || target.closest('input') || target.closest(
-                    'textarea')) return;
-            if (e.button === 0) { // left click
+            if (e.target.closest('.card') || e.target.closest('button') || e.target.closest('input') || e.target
+                .closest('textarea')) return;
+            if (e.button === 0) {
                 isPanning = true;
                 panStart.x = e.clientX;
                 panStart.y = e.clientY;
@@ -1309,12 +1404,10 @@
             }
         });
 
-        // Mouse wheel zoom
         wrapper.addEventListener('wheel', (e) => {
             e.preventDefault();
             const delta = e.deltaY > 0 ? 0.9 : 1.1;
             const newScale = Math.min(3, Math.max(0.2, viewState.scale * delta));
-            // Zoom around cursor
             const rect = wrapper.getBoundingClientRect();
             const offsetX = e.clientX - rect.left;
             const offsetY = e.clientY - rect.top;
@@ -1326,7 +1419,7 @@
             applyTransform();
         }, { passive: false });
 
-        // Touch support for pan
+        // Touch support
         let touchStart = null;
         let touchViewStart = null;
         wrapper.addEventListener('touchstart', (e) => {
@@ -1357,10 +1450,26 @@
             wrapper.classList.remove('panning');
         }, { passive: true });
 
-        // Zoom controls
         document.getElementById('zoomInBtn').addEventListener('click', zoomIn);
         document.getElementById('zoomOutBtn').addEventListener('click', zoomOut);
         document.getElementById('zoomResetBtn').addEventListener('click', resetView);
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  TOAST NOTIFICATIONS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const toastEl = document.getElementById('toast-container');
+        let toastTimeout = null;
+
+        function showToast(message, duration = 2500) {
+            toastEl.textContent = message;
+            toastEl.classList.add('show');
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toastEl.classList.remove('show');
+                toastTimeout = null;
+            }, duration);
+        }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         //  RENDER
@@ -1656,10 +1765,12 @@
                 case 'image': {
                     const dataUrl = card.content?.data || '';
                     const name = card.content?.name || '';
+                    const isExternal = card.content?.external || false;
                     if (dataUrl) {
                         body = `
                             <div class="image-preview"><img src="${dataUrl}" alt="${escapeHTML(name)}" loading="lazy" /></div>
                             <div class="image-name">${escapeHTML(name)}</div>
+                            ${isExternal ? '<div class="external-url-badge">🔗 External</div>' : ''}
                             <button class="upload-btn" style="margin-top:8px;">🔄 Change</button>
                         `;
                     } else {
@@ -1804,33 +1915,19 @@
             if (!dragState) return;
             dragState.moved = true;
             const { card, offsetX, offsetY, boardId, cardId } = dragState;
-            const parent = card.parentElement;
-            const parentRect = parent.getBoundingClientRect();
-            // Account for zoom/pan: we need to convert screen coordinates to card coordinates relative to canvas.
-            // Since the card is inside #canvas which is inside #canvas-container which has transform,
-            // we need to get the position relative to the canvas (untransformed).
-            const containerRect = container.getBoundingClientRect();
-            const scale = viewState.scale;
-            const tx = viewState.x;
-            const ty = viewState.y;
-            // Compute the card's new position in the canvas coordinate system.
-            // The card's CSS left/top are relative to #canvas, which is not transformed.
-            // But we are moving the card by adjusting left/top directly.
-            // We want the card to follow the mouse in screen space, but we need to account for the transform.
-            // Approach: get the mouse position relative to the wrapper, then convert to canvas coordinates.
             const wrapperRect = wrapper.getBoundingClientRect();
             const mouseX = e.clientX - wrapperRect.left;
             const mouseY = e.clientY - wrapperRect.top;
-            // Convert to canvas coordinates (untransformed)
+            const scale = viewState.scale;
+            const tx = viewState.x;
+            const ty = viewState.y;
             const canvasX = (mouseX - tx) / scale;
             const canvasY = (mouseY - ty) / scale;
-            // Offset by the offset we captured (relative to card's top-left)
             const newX = canvasX - offsetX / scale;
             const newY = canvasY - offsetY / scale;
             card.style.left = newX + 'px';
             card.style.top = newY + 'px';
 
-            // detect drop target on sidebar
             const target = document.elementFromPoint(e.clientX, e.clientY);
             const boardItem = target ? target.closest('.board-item') : null;
             document.querySelectorAll('.board-item').forEach(el => el.classList.remove('drag-over'));
@@ -1846,7 +1943,6 @@
                 dropTargetBoardId = null;
             }
 
-            // Throttle save position
             if (!dragState._saveTimer) {
                 dragState._saveTimer = setTimeout(() => {
                     const board = data.boards[boardId];
@@ -1910,7 +2006,6 @@
             const { card, boardId, cardId, moved } = dragState;
             card.classList.remove('dragging');
             card.style.zIndex = '';
-            // final save position
             const board = data.boards[boardId];
             if (board && board.cards[cardId]) {
                 const x = parseFloat(card.style.left) || 0;
@@ -1959,107 +2054,199 @@
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        //  EXTERNAL DRAG & DROP (images from web / files)
+        //  EXTERNAL DRAG & DROP (images, files, text from web)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         const canvasWrapper = document.getElementById('canvas-wrapper');
+        const dropOverlay = document.getElementById('drop-zone-overlay');
+
+        // Drag enter/leave for visual feedback
+        let dragCounter = 0;
+
+        canvasWrapper.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            dragCounter++;
+            if (dragCounter === 1) {
+                dropOverlay.classList.add('show');
+                canvasWrapper.classList.add('drag-over-active');
+            }
+        });
 
         canvasWrapper.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'copy';
-            canvasWrapper.classList.add('drag-over');
         });
 
         canvasWrapper.addEventListener('dragleave', (e) => {
-            canvasWrapper.classList.remove('drag-over');
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter <= 0) {
+                dragCounter = 0;
+                dropOverlay.classList.remove('show');
+                canvasWrapper.classList.remove('drag-over-active');
+            }
         });
 
         canvasWrapper.addEventListener('drop', async (e) => {
             e.preventDefault();
-            canvasWrapper.classList.remove('drag-over');
+            dragCounter = 0;
+            dropOverlay.classList.remove('show');
+            canvasWrapper.classList.remove('drag-over-active');
+
             const board = getCurrentBoard();
             if (!board) {
-                alert('Create a board first!');
+                showToast('❌ Create a board first!', 2000);
                 return;
             }
 
-            const items = e.dataTransfer.items;
             const files = e.dataTransfer.files;
-            let imageFile = null;
-            for (let i = 0; i < files.length; i++) {
-                if (files[i].type.startsWith('image/')) {
-                    imageFile = files[i];
-                    break;
-                }
-            }
+            const items = e.dataTransfer.items;
 
-            if (imageFile) {
-                const dataUrl = await readFileAsDataURL(imageFile);
-                if (dataUrl) {
-                    const pos = getDropPosition(e);
-                    addCard(board.id, 'image', {
-                        data: dataUrl,
-                        name: imageFile.name,
-                        size: imageFile.size,
-                    }, pos);
+            // 1. Handle files (images, PDFs, etc.)
+            if (files && files.length > 0) {
+                for (const file of files) {
+                    if (file.type.startsWith('image/')) {
+                        const dataUrl = await readFileAsDataURL(file);
+                        if (dataUrl) {
+                            const pos = getDropPosition(e);
+                            addCard(board.id, 'image', {
+                                data: dataUrl,
+                                name: file.name,
+                                size: file.size,
+                            }, pos);
+                            showToast(`✅ Image "${file.name}" added`, 1500);
+                        }
+                    } else if (file.type === 'application/pdf') {
+                        // For PDFs, create a file card with the PDF data
+                        const dataUrl = await readFileAsDataURL(file);
+                        if (dataUrl) {
+                            const pos = getDropPosition(e);
+                            addCard(board.id, 'file', {
+                                data: dataUrl,
+                                name: file.name,
+                                size: file.size,
+                            }, pos);
+                            showToast(`✅ PDF "${file.name}" added`, 1500);
+                        }
+                    } else {
+                        // Other files: generic file card
+                        const dataUrl = await readFileAsDataURL(file);
+                        if (dataUrl) {
+                            const pos = getDropPosition(e);
+                            addCard(board.id, 'file', {
+                                data: dataUrl,
+                                name: file.name,
+                                size: file.size,
+                            }, pos);
+                            showToast(`✅ File "${file.name}" added`, 1500);
+                        }
+                    }
                 }
                 return;
             }
 
-            const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
-            if (url && url.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)/i)) {
+            // 2. Handle text/HTML from web (images, links, text)
+            const textData = e.dataTransfer.getData('text/plain');
+            const htmlData = e.dataTransfer.getData('text/html');
+            const uriData = e.dataTransfer.getData('text/uri-list');
+
+            // Check if it's an image URL
+            let imageUrl = null;
+            if (uriData) {
+                const urls = uriData.split('\n').filter(u => u.trim());
+                for (const u of urls) {
+                    if (u.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)/i) || u.startsWith('data:image')) {
+                        imageUrl = u;
+                        break;
+                    }
+                }
+            }
+            if (!imageUrl && htmlData) {
+                const imgMatch = htmlData.match(/<img[^>]+src=["']([^"']+)["']/i);
+                if (imgMatch) imageUrl = imgMatch[1];
+            }
+            if (!imageUrl && textData && textData.match(/\.(jpeg|jpg|png|gif|webp|svg|bmp|ico)/i)) {
+                imageUrl = textData;
+            }
+
+            if (imageUrl) {
                 const pos = getDropPosition(e);
                 try {
-                    const blob = await fetchImageAsBlob(url);
-                    const dataUrl = await readBlobAsDataURL(blob);
-                    const name = url.split('/').pop() || 'image';
-                    addCard(board.id, 'image', {
-                        data: dataUrl,
-                        name: name,
-                        size: blob.size,
-                    }, pos);
-                } catch (err) {
-                    alert('Could not load image from URL. Try saving and uploading manually.');
-                }
-                return;
-            }
-
-            if (url && url.startsWith('http')) {
-                try {
-                    const resp = await fetch(url, { method: 'HEAD' });
-                    const contentType = resp.headers.get('content-type');
-                    if (contentType && contentType.startsWith('image/')) {
-                        const blob = await fetchImageAsBlob(url);
+                    // Try to fetch the image as a blob (CORS may fail)
+                    const blob = await fetchImageAsBlob(imageUrl);
+                    if (blob && blob.type.startsWith('image/')) {
                         const dataUrl = await readBlobAsDataURL(blob);
-                        const pos = getDropPosition(e);
-                        const name = url.split('/').pop() || 'image';
+                        const name = imageUrl.split('/').pop() || 'image';
                         addCard(board.id, 'image', {
                             data: dataUrl,
                             name: name,
                             size: blob.size,
                         }, pos);
-                        return;
+                        showToast(`✅ Image added from URL`, 1500);
+                    } else {
+                        // Fallback: store URL as external image (will load from web)
+                        addCard(board.id, 'image', {
+                            data: imageUrl, // store as external URL
+                            name: 'External image',
+                            external: true,
+                        }, pos);
+                        showToast(`⚠️ Image added as external link (CORS prevented download)`, 2500);
                     }
-                } catch (_) { /* ignore */ }
+                } catch (err) {
+                    // Fallback: store as link card with the URL
+                    addCard(board.id, 'link', {
+                        url: imageUrl,
+                        title: 'External image',
+                        description: 'Drag-dropped image URL (CORS prevented download)',
+                    }, pos);
+                    showToast(`⚠️ Added as link (CORS prevented image download)`, 2500);
+                }
+                return;
             }
 
-            alert('Drop an image file or image URL to create an image card.');
+            // 3. Handle plain text (selected text from web)
+            if (textData && textData.trim().length > 0 && textData.length < 5000) {
+                const pos = getDropPosition(e);
+                addCard(board.id, 'text', {
+                    text: textData,
+                }, pos);
+                showToast(`✅ Text added`, 1500);
+                return;
+            }
+
+            // 4. Handle any URL as link card
+            if (uriData) {
+                const urls = uriData.split('\n').filter(u => u.trim());
+                if (urls.length > 0) {
+                    const pos = getDropPosition(e);
+                    addCard(board.id, 'link', {
+                        url: urls[0],
+                        title: 'Link',
+                        description: 'Dropped from web',
+                    }, pos);
+                    showToast(`✅ Link added`, 1500);
+                    return;
+                }
+            }
+
+            // 5. Nothing recognized
+            showToast('⚠️ Unsupported drop content. Try dropping an image, PDF, or text.', 2500);
         });
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        //  PASTE FROM CLIPBOARD
+        //  PASTE FROM CLIPBOARD (images and text)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         document.addEventListener('paste', async (e) => {
             const board = getCurrentBoard();
             if (!board) {
-                alert('Create a board first!');
+                showToast('❌ Create a board first!', 2000);
                 return;
             }
             const items = e.clipboardData.items;
-            for (let i = 0; i < items.length; i++) {
-                if (items[i].type.startsWith('image/')) {
-                    const file = items[i].getAsFile();
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
                     if (file) {
                         const dataUrl = await readFileAsDataURL(file);
                         if (dataUrl) {
@@ -2069,8 +2256,17 @@
                                 name: 'Pasted image',
                                 size: file.size,
                             }, pos);
+                            showToast('✅ Image pasted from clipboard', 1500);
                             return;
                         }
+                    }
+                } else if (item.type === 'text/plain') {
+                    const text = await new Promise(resolve => item.getAsString(resolve));
+                    if (text && text.trim()) {
+                        const pos = { x: 100 + Math.random() * 200, y: 100 + Math.random() * 200 };
+                        addCard(board.id, 'text', { text: text.trim() }, pos);
+                        showToast('✅ Text pasted from clipboard', 1500);
+                        return;
                     }
                 }
             }
@@ -2099,9 +2295,17 @@
         }
 
         async function fetchImageAsBlob(url) {
-            const resp = await fetch(url, { mode: 'cors' });
-            if (!resp.ok) throw new Error('Network error');
-            return await resp.blob();
+            // Try with CORS
+            try {
+                const resp = await fetch(url, { mode: 'cors' });
+                if (resp.ok) return await resp.blob();
+            } catch (_) { /* fall through */ }
+            // Try with no-cors (will give opaque, but we can still get a blob?)
+            try {
+                const resp = await fetch(url, { mode: 'no-cors' });
+                if (resp.ok) return await resp.blob();
+            } catch (_) { /* ignore */ }
+            throw new Error('Cannot fetch image');
         }
 
         function getDropPosition(e) {
@@ -2139,41 +2343,35 @@
 
         async function exportAsPNG() {
             const board = getCurrentBoard();
-            if (!board) { alert('No board to export.'); return; }
+            if (!board) { showToast('❌ No board to export.', 2000); return; }
             const canvasEl = document.getElementById('canvas');
-            // Temporarily reset transform to capture all cards at natural size
             const origTransform = container.style.transform;
             container.style.transform = 'none';
-            // Wait for reflow
             await new Promise(r => requestAnimationFrame(r));
-            // Capture the canvas (which contains all cards)
-            const captureEl = canvasEl;
             try {
-                const canvas = await html2canvas(captureEl, {
+                const canvas = await html2canvas(canvasEl, {
                     useCORS: true,
                     logging: false,
                     scale: 2,
                     backgroundColor: getComputedStyle(document.body).getPropertyValue('--bg-primary').trim() || '#f4f6f9',
-                    onclone: (clonedDoc) => {
-                        // Ensure cloned elements have proper styles
-                    }
                 });
                 const link = document.createElement('a');
                 link.download = `board_${board.name}_export.png`;
                 link.href = canvas.toDataURL('image/png');
                 link.click();
+                showToast('✅ PNG exported successfully', 2000);
             } catch (err) {
                 console.error(err);
-                alert('Error exporting image.');
+                showToast('❌ Error exporting PNG', 2000);
             } finally {
                 container.style.transform = origTransform;
-                applyTransform(); // reapply
+                applyTransform();
             }
         }
 
         async function exportAsPDF() {
             const board = getCurrentBoard();
-            if (!board) { alert('No board to export.'); return; }
+            if (!board) { showToast('❌ No board to export.', 2000); return; }
             const canvasEl = document.getElementById('canvas');
             const origTransform = container.style.transform;
             container.style.transform = 'none';
@@ -2190,9 +2388,10 @@
                 const pdf = new jsPDF('landscape', 'px', [canvas.width, canvas.height]);
                 pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
                 pdf.save(`board_${board.name}_export.pdf`);
+                showToast('✅ PDF exported successfully', 2000);
             } catch (err) {
                 console.error(err);
-                alert('Error exporting PDF.');
+                showToast('❌ Error exporting PDF', 2000);
             } finally {
                 container.style.transform = origTransform;
                 applyTransform();
@@ -2201,7 +2400,7 @@
 
         function exportAsText() {
             const board = getCurrentBoard();
-            if (!board) { alert('No board to export.'); return; }
+            if (!board) { showToast('❌ No board to export.', 2000); return; }
             const cards = board.cards || {};
             let textContent = `Board: ${board.name}\n`;
             textContent += `Exported: ${new Date().toLocaleString()}\n`;
@@ -2235,6 +2434,7 @@
             link.href = URL.createObjectURL(blob);
             link.click();
             URL.revokeObjectURL(link.href);
+            showToast('✅ Text exported successfully', 2000);
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2277,6 +2477,7 @@
                 saveData();
                 renderAll();
                 document.getElementById('fileInput').value = '';
+                showToast(`✅ File "${file.name}" uploaded`, 1500);
             };
             reader.readAsDataURL(file);
         });
@@ -2373,9 +2574,10 @@
                             const name = url.split('/').pop() || 'image';
                             result = { type: 'image', content: { data: dataUrl, name, size: blob.size } };
                         } catch (_) {
-                            alert('Could not load image from URL. You can drag & drop images instead.');
-                            closeModal();
-                            return;
+                            // Fallback: store as external image
+                            result = { type: 'image', content: { data: url, name: 'External image', external: true,
+                                    size: 0 } };
+                            showToast('⚠️ Image stored as external link (CORS prevented download)', 2500);
                         }
                     } else {
                         result = { type: 'image', content: { data: '', name: '', size: 0 } };
@@ -2410,13 +2612,14 @@
             btn.addEventListener('click', async () => {
                 const board = getCurrentBoard();
                 if (!board) {
-                    alert('Create a board first!');
+                    showToast('❌ Create a board first!', 2000);
                     return;
                 }
                 const type = btn.dataset.type;
                 const result = await openModal(type);
                 if (!result) return;
                 addCard(board.id, result.type, result.content);
+                showToast(`✅ ${type.charAt(0).toUpperCase() + type.slice(1)} card added`, 1500);
             });
         });
 
@@ -2433,6 +2636,7 @@
             const name = prompt('Board name:');
             if (name !== null) {
                 createBoard(name.trim() || 'Untitled');
+                showToast(`✅ Board "${name.trim() || 'Untitled'}" created`, 1500);
             }
         });
 
@@ -2446,6 +2650,7 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(a.href);
+            showToast('✅ Data exported', 1500);
         });
 
         document.getElementById('importBtn').addEventListener('click', () => {
@@ -2470,12 +2675,12 @@
                         saveData();
                         renderAll();
                         resetView();
-                        alert('Import successful!');
+                        showToast('✅ Import successful', 2000);
                     } else {
-                        alert('Invalid data format.');
+                        showToast('❌ Invalid data format', 2000);
                     }
                 } catch (_) {
-                    alert('Error reading file.');
+                    showToast('❌ Error reading file', 2000);
                 }
                 document.getElementById('importFileInput').value = '';
             };
@@ -2489,6 +2694,7 @@
                     saveData();
                     renderAll();
                     resetView();
+                    showToast('🗑️ All data cleared', 1500);
                 }
             }
         });
@@ -2534,10 +2740,7 @@
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
                 saveData();
-                const btn = document.getElementById('exportAllBtn');
-                const orig = btn.textContent;
-                btn.textContent = '✓ Saved';
-                setTimeout(() => btn.textContent = orig, 1200);
+                showToast('💾 Data saved', 1500);
             }
         });
 
@@ -2552,7 +2755,6 @@
             if (first) data.currentBoardId = first;
             saveData();
         }
-        // ensure boardOrder is up to date
         const existing = Object.keys(data.boards);
         data.boardOrder = data.boardOrder.filter(id => existing.includes(id));
         existing.forEach(id => {
@@ -2563,12 +2765,8 @@
         renderAll();
         resetView();
 
-        console.log('📋 Milanote Clone loaded. Data:', data);
-        console.log('💾 Data is stored in localStorage under key:', STORAGE_KEY);
-        console.log('📤 Use "Export All" to backup, "Import" to restore.');
-        console.log('🔄 Drag cards to sidebar to move them between boards.');
-        console.log('📌 Drag board names in sidebar to reorder them.');
-        console.log('🖼️ Drag images from web or paste from clipboard to create image cards instantly.');
+        console.log('📋 Milanote Clone loaded.');
+        console.log('🔄 Drag & drop images, PDFs, files, or text from anywhere.');
         console.log('🔍 Pan with mouse drag, zoom with scroll or buttons.');
         console.log('🌙 Toggle dark theme in sidebar.');
         console.log('📄 Export board as PDF, PNG, or TXT from topbar.');
