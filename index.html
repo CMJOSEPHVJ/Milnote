@@ -1217,6 +1217,18 @@
         </div>
     </div>
 
+    <!-- ─── MODAL (Add Card) ─── -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="modalContent">
+            <h2 id="modalTitle">Add Card</h2>
+            <div id="modalBody"></div>
+            <div class="modal-actions">
+                <button class="btn-cancel" id="modalCancel">Cancel</button>
+                <button class="btn-confirm" id="modalConfirm">Add</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ─── FILE INPUTS ─── -->
     <input type="file" id="fileInput" style="display:none" accept="image/*,.*" multiple />
     <input type="file" id="importFileInput" style="display:none" accept=".json" />
@@ -2694,20 +2706,24 @@
         const telegramCancel = document.getElementById('telegramCancel');
         const telegramSend = document.getElementById('telegramSend');
 
-        telegramCancel.addEventListener('click', () => {
-            telegramModal.classList.remove('open');
-        });
+        if (telegramCancel) {
+            telegramCancel.addEventListener('click', () => {
+                telegramModal.classList.remove('open');
+            });
+        }
 
-        telegramSend.addEventListener('click', async () => {
-            const token = telegramToken.value.trim();
-            const chatId = telegramChatId.value.trim();
-            if (!token || !chatId) {
-                showToast('❌ Please enter Bot Token and Channel ID.', 2000);
-                return;
-            }
-            telegramModal.classList.remove('open');
-            await uploadToTelegram(token, chatId);
-        });
+        if (telegramSend) {
+            telegramSend.addEventListener('click', async () => {
+                const token = telegramToken.value.trim();
+                const chatId = telegramChatId.value.trim();
+                if (!token || !chatId) {
+                    showToast('❌ Please enter Bot Token and Channel ID.', 2000);
+                    return;
+                }
+                telegramModal.classList.remove('open');
+                await uploadToTelegram(token, chatId);
+            });
+        }
 
         async function uploadToTelegram(token, chatId) {
             const board = getCurrentBoard();
@@ -2799,24 +2815,30 @@
         const boardNameCancel = document.getElementById('boardNameCancel');
         const boardNameConfirm = document.getElementById('boardNameConfirm');
 
-        boardNameCancel.addEventListener('click', () => {
-            boardNameModal.classList.remove('open');
-        });
-
-        boardNameConfirm.addEventListener('click', () => {
-            const name = boardNameInput.value.trim() || 'Untitled';
-            const newId = createBoard(name);
-            if (newId) {
+        if (boardNameCancel) {
+            boardNameCancel.addEventListener('click', () => {
                 boardNameModal.classList.remove('open');
-                showToast(`✅ Board "${name}" created`, 1500);
-            }
-        });
+            });
+        }
 
-        boardNameInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                boardNameConfirm.click();
-            }
-        });
+        if (boardNameConfirm) {
+            boardNameConfirm.addEventListener('click', () => {
+                const name = boardNameInput.value.trim() || 'Untitled';
+                const newId = createBoard(name);
+                if (newId) {
+                    boardNameModal.classList.remove('open');
+                    showToast(`✅ Board "${name}" created`, 1500);
+                }
+            });
+        }
+
+        if (boardNameInput) {
+            boardNameInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    boardNameConfirm.click();
+                }
+            });
+        }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         //  EXPORT FUNCTIONS
@@ -2974,6 +2996,19 @@
         const modalConfirm = document.getElementById('modalConfirm');
         const modalCancel = document.getElementById('modalCancel');
 
+        // Safety checks for modal elements
+        if (modalCancel) {
+            modalCancel.addEventListener('click', closeModal);
+        }
+        if (modalConfirm) {
+            modalConfirm.addEventListener('click', confirmModal);
+        }
+        if (modalOverlay) {
+            modalOverlay.addEventListener('click', (e) => {
+                if (e.target === modalOverlay) closeModal();
+            });
+        }
+
         let modalResolve = null;
         let modalType = 'text';
 
@@ -2988,10 +3023,10 @@
                     link: 'Add Link',
                     file: 'Add File',
                 };
-                modalTitle.textContent = labels[type] || 'Add Card';
-                modalBody.innerHTML = buildModalBody(type);
-                modalOverlay.classList.add('open');
-                const firstInput = modalBody.querySelector('input, textarea');
+                if (modalTitle) modalTitle.textContent = labels[type] || 'Add Card';
+                if (modalBody) modalBody.innerHTML = buildModalBody(type);
+                if (modalOverlay) modalOverlay.classList.add('open');
+                const firstInput = modalBody?.querySelector('input, textarea');
                 if (firstInput) setTimeout(() => firstInput.focus(), 100);
             });
         }
@@ -3013,14 +3048,8 @@
             }
         }
 
-        modalCancel.addEventListener('click', closeModal);
-        modalOverlay.addEventListener('click', (e) => {
-            if (e.target === modalOverlay) closeModal();
-        });
-        modalConfirm.addEventListener('click', confirmModal);
-
         function closeModal() {
-            modalOverlay.classList.remove('open');
+            if (modalOverlay) modalOverlay.classList.remove('open');
             if (modalResolve) {
                 modalResolve(null);
                 modalResolve = null;
@@ -3078,7 +3107,7 @@
                 default:
                     result = null;
             }
-            modalOverlay.classList.remove('open');
+            modalOverlay?.classList.remove('open');
             const resolve = modalResolve;
             modalResolve = null;
             resolve(result);
@@ -3113,17 +3142,20 @@
             }
             const savedToken = localStorage.getItem('telegram_token') || '';
             const savedChat = localStorage.getItem('telegram_chat') || '';
-            telegramToken.value = savedToken;
-            telegramChatId.value = savedChat;
-            telegramModal.classList.add('open');
+            if (telegramToken) telegramToken.value = savedToken;
+            if (telegramChatId) telegramChatId.value = savedChat;
+            if (telegramModal) telegramModal.classList.add('open');
         });
 
-        telegramSend.addEventListener('click', () => {
-            const token = telegramToken.value.trim();
-            const chatId = telegramChatId.value.trim();
-            if (token) localStorage.setItem('telegram_token', token);
-            if (chatId) localStorage.setItem('telegram_chat', chatId);
-        });
+        // Save Telegram credentials on send
+        if (telegramSend) {
+            telegramSend.addEventListener('click', () => {
+                const token = telegramToken?.value?.trim() || '';
+                const chatId = telegramChatId?.value?.trim() || '';
+                if (token) localStorage.setItem('telegram_token', token);
+                if (chatId) localStorage.setItem('telegram_chat', chatId);
+            });
+        }
 
         document.getElementById('exportPdfBtn').addEventListener('click', exportAsPDF);
         document.getElementById('exportPngBtn').addEventListener('click', exportAsPNG);
@@ -3133,11 +3165,10 @@
         //  BOARD ACTIONS
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        // New Board button - opens custom modal
         document.getElementById('addBoardBtn').addEventListener('click', () => {
-            boardNameInput.value = 'My Board';
-            boardNameModal.classList.add('open');
-            setTimeout(() => boardNameInput.focus(), 100);
+            if (boardNameInput) boardNameInput.value = 'My Board';
+            if (boardNameModal) boardNameModal.classList.add('open');
+            setTimeout(() => boardNameInput?.focus(), 100);
         });
 
         document.getElementById('exportAllBtn').addEventListener('click', () => {
@@ -3211,20 +3242,22 @@
         function applyTheme() {
             if (darkMode) {
                 document.body.classList.add('dark-theme');
-                themeIcon.textContent = '☀️';
-                themeLabel.textContent = 'Light';
+                if (themeIcon) themeIcon.textContent = '☀️';
+                if (themeLabel) themeLabel.textContent = 'Light';
             } else {
                 document.body.classList.remove('dark-theme');
-                themeIcon.textContent = '🌙';
-                themeLabel.textContent = 'Dark';
+                if (themeIcon) themeIcon.textContent = '🌙';
+                if (themeLabel) themeLabel.textContent = 'Dark';
             }
             localStorage.setItem('milanote_dark', darkMode);
         }
 
-        themeToggle.addEventListener('click', () => {
-            darkMode = !darkMode;
-            applyTheme();
-        });
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                darkMode = !darkMode;
+                applyTheme();
+            });
+        }
 
         applyTheme();
 
@@ -3234,10 +3267,10 @@
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                if (modalOverlay.classList.contains('open')) closeModal();
+                if (modalOverlay?.classList.contains('open')) closeModal();
                 if (lightbox.classList.contains('open')) lightbox.classList.remove('open');
-                if (telegramModal.classList.contains('open')) telegramModal.classList.remove('open');
-                if (boardNameModal.classList.contains('open')) boardNameModal.classList.remove('open');
+                if (telegramModal?.classList.contains('open')) telegramModal.classList.remove('open');
+                if (boardNameModal?.classList.contains('open')) boardNameModal.classList.remove('open');
             }
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
@@ -3268,13 +3301,13 @@
         resetView();
 
         console.log('📋 Milanote Clone loaded.');
-        console.log('📋 "New Board" now uses a custom modal for reliable creation.');
+        console.log('📋 "New Board" uses a custom modal.');
         console.log('🔄 Drag & drop images, PDFs, files, or text from anywhere.');
         console.log('🔍 Pan with mouse drag, zoom with scroll or buttons.');
         console.log('🌙 Toggle dark theme in sidebar.');
         console.log('📄 Export board as PDF, PNG, or TXT.');
         console.log('✋ Resize cards by dragging the bottom-right corner.');
-        console.log('⬇️ Download individual images/files with the download button on each card.');
+        console.log('⬇️ Download individual items with the download button on each card.');
         console.log('📦 Download all as ZIP with the "ZIP" button.');
         console.log('📤 Upload all to Telegram with the "Telegram" button.');
     </script>
