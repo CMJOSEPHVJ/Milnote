@@ -2402,6 +2402,20 @@
 
             if (imageUrl) {
                 const pos = getDropPosition(e);
+                // Check if it's a Pinterest URL - skip fetch to avoid CORS error
+                const isPinterest = imageUrl.includes('pinimg.com') || imageUrl.includes('pinterest.com');
+                if (isPinterest) {
+                    // Directly use as external image
+                    addCard(board.id, 'image', {
+                        data: imageUrl,
+                        name: 'Pinterest image',
+                        external: true,
+                    }, pos);
+                    showToast(`🖼️ Pinterest image added (thumbnail will load)`, 3000);
+                    return;
+                }
+
+                // Try to fetch with CORS first
                 try {
                     const blob = await fetchImageAsBlob(imageUrl);
                     if (blob && blob.type.startsWith('image/')) {
@@ -2419,17 +2433,9 @@
                     // CORS failed, fall through to external URL method
                 }
 
-                let cleanUrl = imageUrl;
-                if (cleanUrl.includes('pinimg.com') || cleanUrl.includes('pinterest.com')) {
-                    try {
-                        const urlObj = new URL(cleanUrl);
-                        if (urlObj.hostname.includes('pinimg.com')) {
-                            cleanUrl = urlObj.href;
-                        }
-                    } catch (_) { /* ignore */ }
-                }
+                // Fallback: store as external image
                 addCard(board.id, 'image', {
-                    data: cleanUrl,
+                    data: imageUrl,
                     name: 'External image',
                     external: true,
                 }, pos);
@@ -2996,7 +3002,6 @@
         const modalConfirm = document.getElementById('modalConfirm');
         const modalCancel = document.getElementById('modalCancel');
 
-        // Safety checks for modal elements
         if (modalCancel) {
             modalCancel.addEventListener('click', closeModal);
         }
@@ -3078,15 +3083,22 @@
                 case 'image': {
                     const url = document.getElementById('modalImageInput')?.value || '';
                     if (url) {
-                        try {
-                            const blob = await fetchImageAsBlob(url);
-                            const dataUrl = await readBlobAsDataURL(blob);
-                            const name = url.split('/').pop() || 'image';
-                            result = { type: 'image', content: { data: dataUrl, name, size: blob.size } };
-                        } catch (_) {
-                            result = { type: 'image', content: { data: url, name: 'External image', external: true,
+                        const isPinterest = url.includes('pinimg.com') || url.includes('pinterest.com');
+                        if (isPinterest) {
+                            result = { type: 'image', content: { data: url, name: 'Pinterest image', external: true,
                                     size: 0 } };
-                            showToast('🖼️ Image added as external (thumbnail should load)', 3000);
+                            showToast('🖼️ Pinterest image added (thumbnail will load)', 3000);
+                        } else {
+                            try {
+                                const blob = await fetchImageAsBlob(url);
+                                const dataUrl = await readBlobAsDataURL(blob);
+                                const name = url.split('/').pop() || 'image';
+                                result = { type: 'image', content: { data: dataUrl, name, size: blob.size } };
+                            } catch (_) {
+                                result = { type: 'image', content: { data: url, name: 'External image', external: true,
+                                        size: 0 } };
+                                showToast('🖼️ Image added as external (thumbnail should load)', 3000);
+                            }
                         }
                     } else {
                         result = { type: 'image', content: { data: '', name: '', size: 0 } };
@@ -3147,7 +3159,6 @@
             if (telegramModal) telegramModal.classList.add('open');
         });
 
-        // Save Telegram credentials on send
         if (telegramSend) {
             telegramSend.addEventListener('click', () => {
                 const token = telegramToken?.value?.trim() || '';
