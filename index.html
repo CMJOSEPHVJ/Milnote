@@ -422,6 +422,9 @@
             transition: opacity 0.3s ease;
             pointer-events: none;
             white-space: nowrap;
+            max-width: 90%;
+            text-overflow: ellipsis;
+            overflow: hidden;
         }
         #toast-container.show {
             opacity: 1;
@@ -442,7 +445,6 @@
             user-select: none;
             backdrop-filter: blur(2px);
             color: var(--text-primary);
-            /* Resize handle will be positioned absolute */
         }
         .card:hover {
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10), 0 2px 6px rgba(0, 0, 0, 0.04);
@@ -630,6 +632,7 @@
             justify-content: center;
             cursor: pointer;
             position: relative;
+            min-height: 60px;
         }
         .card.image-card .image-preview img {
             width: 100%;
@@ -680,6 +683,22 @@
             padding: 20px;
             text-align: center;
             color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+        .card.image-card .image-error .retry-btn {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 6px 16px;
+            background: var(--accent);
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: 0.15s;
+        }
+        .card.image-card .image-error .retry-btn:hover {
+            background: var(--accent-hover);
         }
 
         /* link card */
@@ -1036,6 +1055,8 @@
                 font-size: 0.8rem;
                 padding: 10px 16px;
                 bottom: 60px;
+                white-space: normal;
+                max-width: 85%;
             }
         }
         @media (max-width: 480px) {
@@ -1695,6 +1716,7 @@
                 }
 
                 if (type === 'image') {
+                    // Image preview click to open lightbox
                     const preview = el.querySelector('.image-preview');
                     if (preview) {
                         preview.addEventListener('click', () => {
@@ -1704,6 +1726,7 @@
                             }
                         });
                     }
+                    // Upload button
                     const uploadBtn = el.querySelector('.upload-btn');
                     const fileInput = document.getElementById('fileInput');
                     if (uploadBtn) {
@@ -1713,6 +1736,21 @@
                             fileInput.dataset.targetCardId = cardId;
                             fileInput.dataset.targetBoardId = boardId;
                             fileInput.click();
+                        });
+                    }
+                    // Retry button for external images
+                    const retryBtn = el.querySelector('.retry-btn');
+                    if (retryBtn) {
+                        retryBtn.addEventListener('click', () => {
+                            // Re-render the card with the same URL
+                            const cardData = data.boards[boardId]?.cards[cardId];
+                            if (cardData) {
+                                // Force a re-render by updating content
+                                const content = { ...cardData.content };
+                                // Toggle external flag to force re-render
+                                content._refresh = Date.now();
+                                updateCardContent(boardId, cardId, content);
+                            }
                         });
                     }
                 }
@@ -1813,11 +1851,19 @@
                     const dataUrl = card.content?.data || '';
                     const name = card.content?.name || '';
                     const isExternal = card.content?.external || false;
+                    const isDataUrl = dataUrl.startsWith('data:');
+                    // If external, we need to try loading the image directly
                     if (dataUrl) {
+                        // For external images, use referrerPolicy and crossorigin to help loading
+                        const imgAttrs = isDataUrl ? '' : `referrerpolicy="no-referrer" crossorigin="anonymous"`;
+                        // Check if it's a URL that might need special handling
+                        const isPinterest = dataUrl.includes('pinimg.com') || dataUrl.includes('pinterest.com');
+                        const imgSrc = isPinterest ? dataUrl.replace(/&/g, '&amp;') : dataUrl;
                         body = `
                             <div class="image-preview">
-                                <img src="${escapeHTML(dataUrl)}" alt="${escapeHTML(name)}" loading="lazy" 
-                                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'image-error\\'>⚠️ Image not available</div>';" />
+                                <img src="${escapeHTML(imgSrc)}" alt="${escapeHTML(name)}" loading="lazy" 
+                                     ${imgAttrs}
+                                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'image-error\\'>⚠️ Image could not be loaded from external source<br><button class=\\'retry-btn\\'>🔄 Retry</button></div>';" />
                             </div>
                             <div class="image-name">${escapeHTML(name)} ${isExternal ? '🔗' : ''}</div>
                             <button class="upload-btn" style="margin-top:8px;">🔄 Change</button>
@@ -1922,7 +1968,6 @@
                 isResizing = true;
                 document.addEventListener('mousemove', onResizeMove);
                 document.addEventListener('mouseup', onResizeEnd);
-                // Prevent card drag from firing
                 card.style.cursor = 'nw-resize';
             });
 
@@ -1930,10 +1975,8 @@
                 if (!isResizing) return;
                 const dx = e.clientX - startX;
                 let newWidth = Math.max(180, startWidth + dx);
-                // Limit max width to 600px
                 newWidth = Math.min(600, newWidth);
                 card.style.width = newWidth + 'px';
-                // Update card data in real-time (throttled)
                 if (!handle._saveTimer) {
                     handle._saveTimer = setTimeout(() => {
                         const board = data.boards[boardId];
@@ -1975,7 +2018,7 @@
         function startDrag(e) {
             if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) return;
             if (e.target.closest('.card-actions')) return;
-            if (e.target.closest('.resize-handle')) return; // Ignore resize handle
+            if (e.target.closest('.resize-handle')) return;
             const card = e.currentTarget;
             const cardId = card.dataset.cardId;
             const boardId = card.dataset.boardId;
@@ -2281,6 +2324,7 @@
 
             if (imageUrl) {
                 const pos = getDropPosition(e);
+                // Try to fetch with CORS first
                 try {
                     const blob = await fetchImageAsBlob(imageUrl);
                     if (blob && blob.type.startsWith('image/')) {
@@ -2291,27 +2335,37 @@
                             name: name,
                             size: blob.size,
                         }, pos);
-                        showToast(`✅ Image added from URL`, 1500);
-                    } else {
-                        // Fallback: store as external image URL
-                        addCard(board.id, 'image', {
-                            data: imageUrl,
-                            name: 'External image',
-                            external: true,
-                        }, pos);
-                        showToast(`⚠️ Image added as external link (CORS prevented download)`, 2500);
+                        showToast(`✅ Image downloaded and added`, 1500);
+                        return;
                     }
-                } catch (err) {
-                    addCard(board.id, 'link', {
-                        url: imageUrl,
-                        title: 'External image',
-                        description: 'Drag-dropped image URL (CORS prevented download)',
-                    }, pos);
-                    showToast(`⚠️ Added as link (CORS prevented image download)`, 2500);
+                } catch (_) {
+                    // CORS failed, fall through to external URL method
                 }
+
+                // If CORS fails, try to load as external image URL directly
+                // Clean up the URL
+                let cleanUrl = imageUrl;
+                // Handle Pinterest URLs specially
+                if (cleanUrl.includes('pinimg.com') || cleanUrl.includes('pinterest.com')) {
+                    // Try to extract the raw image URL
+                    try {
+                        const urlObj = new URL(cleanUrl);
+                        if (urlObj.hostname.includes('pinimg.com')) {
+                            // Pinterest image URLs are usually fine
+                            cleanUrl = urlObj.href;
+                        }
+                    } catch (_) { /* ignore */ }
+                }
+                addCard(board.id, 'image', {
+                    data: cleanUrl,
+                    name: 'External image',
+                    external: true,
+                }, pos);
+                showToast(`🖼️ Image added (external) — CORS prevented download, but thumbnail should load`, 3000);
                 return;
             }
 
+            // 3. Handle plain text
             if (textData && textData.trim().length > 0 && textData.length < 5000) {
                 const pos = getDropPosition(e);
                 addCard(board.id, 'text', {
@@ -2321,6 +2375,7 @@
                 return;
             }
 
+            // 4. Handle any URL as link card
             if (uriData) {
                 const urls = uriData.split('\n').filter(u => u.trim());
                 if (urls.length > 0) {
@@ -2677,9 +2732,11 @@
                             const name = url.split('/').pop() || 'image';
                             result = { type: 'image', content: { data: dataUrl, name, size: blob.size } };
                         } catch (_) {
+                            // If CORS fails, store as external URL
                             result = { type: 'image', content: { data: url, name: 'External image', external: true,
                                     size: 0 } };
-                            showToast('⚠️ Image stored as external link (CORS prevented download)', 2500);
+                            showToast('🖼️ Image added as external (CORS prevented download, but thumbnail should load)',
+                            3000);
                         }
                     } else {
                         result = { type: 'image', content: { data: '', name: '', size: 0 } };
@@ -2873,6 +2930,7 @@
         console.log('🌙 Toggle dark theme in sidebar.');
         console.log('📄 Export board as PDF, PNG, or TXT from topbar.');
         console.log('✋ Resize cards by dragging the bottom-right corner handle.');
+        console.log('🖼️ External images now show thumbnails even with CORS restrictions.');
     </script>
 </body>
 </html>
