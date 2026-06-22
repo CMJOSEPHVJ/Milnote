@@ -918,6 +918,14 @@
             background: var(--accent-hover);
         }
 
+        /* ─── BOARD NAME MODAL ─── */
+        #boardNameModal .modal {
+            max-width: 400px;
+        }
+        #boardNameModal .modal input {
+            margin-top: 4px;
+        }
+
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -1196,6 +1204,19 @@
         </div>
     </div>
 
+    <!-- ─── MODAL (Board Name) ─── -->
+    <div class="modal-overlay" id="boardNameModal">
+        <div class="modal">
+            <h2>📋 New Board</h2>
+            <label>Board Name</label>
+            <input id="boardNameInput" placeholder="Enter board name…" value="My Board" />
+            <div class="modal-actions">
+                <button class="btn-cancel" id="boardNameCancel">Cancel</button>
+                <button class="btn-confirm" id="boardNameConfirm">Create</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ─── FILE INPUTS ─── -->
     <input type="file" id="fileInput" style="display:none" accept="image/*,.*" multiple />
     <input type="file" id="importFileInput" style="display:none" accept=".json" />
@@ -1266,17 +1287,23 @@
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         function createBoard(name) {
-            const id = 'b_' + (data.nextBoardId++);
-            data.boards[id] = {
-                id,
-                name: name || 'Untitled',
-                cards: {},
-            };
-            data.boardOrder.push(id);
-            data.currentBoardId = id;
-            saveData();
-            renderAll();
-            return id;
+            try {
+                const id = 'b_' + (data.nextBoardId++);
+                data.boards[id] = {
+                    id,
+                    name: name || 'Untitled',
+                    cards: {},
+                };
+                data.boardOrder.push(id);
+                data.currentBoardId = id;
+                saveData();
+                renderAll();
+                return id;
+            } catch (err) {
+                console.error('Error creating board:', err);
+                showToast('❌ Error creating board: ' + err.message, 3000);
+                return null;
+            }
         }
 
         function deleteBoard(id) {
@@ -1702,7 +1729,7 @@
                 makeResizable(handle);
             });
 
-            // Attach card event listeners (delete, edit, download, etc.)
+            // Attach card event listeners
             canvas.querySelectorAll('.card').forEach(el => {
                 const cardId = el.dataset.cardId;
                 const boardId = el.dataset.boardId;
@@ -1715,7 +1742,7 @@
                     }
                 });
 
-                // Download card (image or file)
+                // Download card
                 const dlBtn = el.querySelector('.download-card');
                 if (dlBtn) {
                     dlBtn.addEventListener('click', () => {
@@ -1760,7 +1787,6 @@
                 }
 
                 if (type === 'image') {
-                    // Image preview click to open lightbox
                     const preview = el.querySelector('.image-preview');
                     if (preview) {
                         preview.addEventListener('click', () => {
@@ -1770,7 +1796,6 @@
                             }
                         });
                     }
-                    // Upload button
                     const uploadBtn = el.querySelector('.upload-btn');
                     const fileInput = document.getElementById('fileInput');
                     if (uploadBtn) {
@@ -1782,7 +1807,6 @@
                             fileInput.click();
                         });
                     }
-                    // Retry button for external images
                     const retryBtn = el.querySelector('.retry-btn');
                     if (retryBtn) {
                         retryBtn.addEventListener('click', () => {
@@ -1960,7 +1984,6 @@
                 file: '📎 File'
             };
 
-            // Add download button for image and file cards
             let downloadBtn = '';
             if (card.type === 'image' || card.type === 'file') {
                 downloadBtn = `<button class="download-card" title="Download this item">⬇</button>`;
@@ -2303,7 +2326,6 @@
             const files = e.dataTransfer.files;
             const items = e.dataTransfer.items;
 
-            // 1. Handle files (images, PDFs, etc.)
             if (files && files.length > 0) {
                 for (const file of files) {
                     if (file.type.startsWith('image/')) {
@@ -2344,7 +2366,6 @@
                 return;
             }
 
-            // 2. Handle text/HTML from web (images, links, text)
             const textData = e.dataTransfer.getData('text/plain');
             const htmlData = e.dataTransfer.getData('text/html');
             const uriData = e.dataTransfer.getData('text/uri-list');
@@ -2369,7 +2390,6 @@
 
             if (imageUrl) {
                 const pos = getDropPosition(e);
-                // Try to fetch with CORS first
                 try {
                     const blob = await fetchImageAsBlob(imageUrl);
                     if (blob && blob.type.startsWith('image/')) {
@@ -2387,8 +2407,6 @@
                     // CORS failed, fall through to external URL method
                 }
 
-                // If CORS fails, store as external URL (will show thumbnail)
-                // Clean up URL for Pinterest etc.
                 let cleanUrl = imageUrl;
                 if (cleanUrl.includes('pinimg.com') || cleanUrl.includes('pinterest.com')) {
                     try {
@@ -2407,7 +2425,6 @@
                 return;
             }
 
-            // 3. Handle plain text
             if (textData && textData.trim().length > 0 && textData.length < 5000) {
                 const pos = getDropPosition(e);
                 addCard(board.id, 'text', {
@@ -2417,7 +2434,6 @@
                 return;
             }
 
-            // 4. Handle any URL as link card
             if (uriData) {
                 const urls = uriData.split('\n').filter(u => u.trim());
                 if (urls.length > 0) {
@@ -2432,11 +2448,11 @@
                 }
             }
 
-            showToast('⚠️ Unsupported drop content. Try dropping an image, PDF, or text.', 2500);
+            showToast('⚠️ Unsupported drop content.', 2500);
         });
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        //  PASTE FROM CLIPBOARD (images and text)
+        //  PASTE FROM CLIPBOARD
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         document.addEventListener('paste', async (e) => {
@@ -2551,7 +2567,6 @@
                 showToast('❌ No data to download', 2000);
                 return;
             }
-            // If it's a data URL, download directly
             if (content.data.startsWith('data:')) {
                 const a = document.createElement('a');
                 a.href = content.data;
@@ -2561,7 +2576,6 @@
                 document.body.removeChild(a);
                 showToast(`✅ Downloaded "${content.name || 'file'}"`, 1500);
             } else {
-                // External URL: open in new tab or fetch
                 const a = document.createElement('a');
                 a.href = content.data;
                 a.target = '_blank';
@@ -2583,12 +2597,10 @@
             const imageData = [];
             const fileData = [];
 
-            // Collect all images and files with data URLs
             for (const id in cards) {
                 const card = cards[id];
                 if ((card.type === 'image' || card.type === 'file') && card.content && card.content.data) {
                     if (card.content.data.startsWith('data:')) {
-                        // Local data URL
                         const entry = {
                             name: card.content.name || 'untitled',
                             data: card.content.data,
@@ -2597,8 +2609,6 @@
                         if (card.type === 'image') imageData.push(entry);
                         else fileData.push(entry);
                     } else {
-                        // External URL – we'll skip for zip (can't fetch due to CORS)
-                        // We'll add a text note in the zip
                         fileData.push({
                             name: card.content.name || 'external_url.txt',
                             data: card.content.data,
@@ -2623,10 +2633,8 @@
                 let count = 0;
                 const total = imageData.length + fileData.length;
 
-                // Add images
                 for (const item of imageData) {
                     progressEl.textContent = `Adding ${item.name} (${count+1}/${total})…`;
-                    // Convert data URL to blob
                     const blob = dataURLToBlob(item.data);
                     const ext = item.name.split('.').pop() || 'png';
                     const fileName = `${item.name}`;
@@ -2634,10 +2642,8 @@
                     count++;
                 }
 
-                // Add files
                 for (const item of fileData) {
                     if (item.external) {
-                        // For external URLs, add a text file with the URL
                         zip.file(`${item.name}.txt`, `External URL: ${item.data}`);
                     } else {
                         progressEl.textContent = `Adding ${item.name} (${count+1}/${total})…`;
@@ -2712,7 +2718,6 @@
             const cards = board.cards || {};
             const items = [];
 
-            // Collect images and files with data URLs
             for (const id in cards) {
                 const card = cards[id];
                 if ((card.type === 'image' || card.type === 'file') && card.content && card.content.data) {
@@ -2723,7 +2728,6 @@
                             type: card.type,
                         });
                     } else {
-                        // External URL – we can't upload directly, but we can send as text
                         items.push({
                             name: card.content.name || 'external_url.txt',
                             data: card.content.data,
@@ -2755,7 +2759,6 @@
                     formData.append('chat_id', chatId);
 
                     if (item.external || item.type === 'text') {
-                        // Send as text
                         const text = item.external ? `External file: ${item.data}` : `File: ${item.name}`;
                         formData.append('text', text);
                         const resp = await fetch(url + 'sendMessage', {
@@ -2765,7 +2768,6 @@
                         if (resp.ok) successCount++;
                         else console.error('Telegram sendMessage failed', await resp.text());
                     } else {
-                        // Send as photo or document
                         const blob = dataURLToBlob(item.data);
                         const fileType = item.type === 'image' ? 'photo' : 'document';
                         const fileField = fileType === 'photo' ? 'photo' : 'document';
@@ -2787,6 +2789,34 @@
                 progressEl.textContent = 'Preparing download…';
             }
         }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  BOARD NAME MODAL
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const boardNameModal = document.getElementById('boardNameModal');
+        const boardNameInput = document.getElementById('boardNameInput');
+        const boardNameCancel = document.getElementById('boardNameCancel');
+        const boardNameConfirm = document.getElementById('boardNameConfirm');
+
+        boardNameCancel.addEventListener('click', () => {
+            boardNameModal.classList.remove('open');
+        });
+
+        boardNameConfirm.addEventListener('click', () => {
+            const name = boardNameInput.value.trim() || 'Untitled';
+            const newId = createBoard(name);
+            if (newId) {
+                boardNameModal.classList.remove('open');
+                showToast(`✅ Board "${name}" created`, 1500);
+            }
+        });
+
+        boardNameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                boardNameConfirm.click();
+            }
+        });
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         //  EXPORT FUNCTIONS
@@ -3058,7 +3088,6 @@
         //  TOOLBAR BUTTONS
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        // Add card buttons
         document.querySelectorAll('#topbar .toolbar-group button[data-type]').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const board = getCurrentBoard();
@@ -3074,17 +3103,14 @@
             });
         });
 
-        // Download All (ZIP)
         document.getElementById('downloadAllBtn').addEventListener('click', downloadAllBoard);
 
-        // Telegram Upload
         document.getElementById('telegramUploadBtn').addEventListener('click', () => {
             const board = getCurrentBoard();
             if (!board) {
                 showToast('❌ Create a board first!', 2000);
                 return;
             }
-            // Pre-fill token from localStorage?
             const savedToken = localStorage.getItem('telegram_token') || '';
             const savedChat = localStorage.getItem('telegram_chat') || '';
             telegramToken.value = savedToken;
@@ -3092,7 +3118,6 @@
             telegramModal.classList.add('open');
         });
 
-        // Save Telegram credentials on send
         telegramSend.addEventListener('click', () => {
             const token = telegramToken.value.trim();
             const chatId = telegramChatId.value.trim();
@@ -3100,7 +3125,6 @@
             if (chatId) localStorage.setItem('telegram_chat', chatId);
         });
 
-        // Export buttons
         document.getElementById('exportPdfBtn').addEventListener('click', exportAsPDF);
         document.getElementById('exportPngBtn').addEventListener('click', exportAsPNG);
         document.getElementById('exportTxtBtn').addEventListener('click', exportAsText);
@@ -3109,12 +3133,11 @@
         //  BOARD ACTIONS
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+        // New Board button - opens custom modal
         document.getElementById('addBoardBtn').addEventListener('click', () => {
-            const name = prompt('Board name:');
-            if (name !== null) {
-                createBoard(name.trim() || 'Untitled');
-                showToast(`✅ Board "${name.trim() || 'Untitled'}" created`, 1500);
-            }
+            boardNameInput.value = 'My Board';
+            boardNameModal.classList.add('open');
+            setTimeout(() => boardNameInput.focus(), 100);
         });
 
         document.getElementById('exportAllBtn').addEventListener('click', () => {
@@ -3214,6 +3237,7 @@
                 if (modalOverlay.classList.contains('open')) closeModal();
                 if (lightbox.classList.contains('open')) lightbox.classList.remove('open');
                 if (telegramModal.classList.contains('open')) telegramModal.classList.remove('open');
+                if (boardNameModal.classList.contains('open')) boardNameModal.classList.remove('open');
             }
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
@@ -3244,12 +3268,12 @@
         resetView();
 
         console.log('📋 Milanote Clone loaded.');
+        console.log('📋 "New Board" now uses a custom modal for reliable creation.');
         console.log('🔄 Drag & drop images, PDFs, files, or text from anywhere.');
         console.log('🔍 Pan with mouse drag, zoom with scroll or buttons.');
         console.log('🌙 Toggle dark theme in sidebar.');
         console.log('📄 Export board as PDF, PNG, or TXT.');
         console.log('✋ Resize cards by dragging the bottom-right corner.');
-        console.log('🖼️ External images now show thumbnails.');
         console.log('⬇️ Download individual images/files with the download button on each card.');
         console.log('📦 Download all as ZIP with the "ZIP" button.');
         console.log('📤 Upload all to Telegram with the "Telegram" button.');
